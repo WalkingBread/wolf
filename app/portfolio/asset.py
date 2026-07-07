@@ -26,11 +26,14 @@ class Asset:
     def value(self) -> float:
         return self._instrument.current_price * self.volume
     
+    def get_value_at_date(self, date: datetime) -> float:
+        market_data = self._instrument.get_market_data_at_closest_trading_day(date)
+        return market_data['close']
+    
     def get_value_change(self, date: datetime = None) -> float:
         price_at_date = self._instrument.current_price
         if date:
-            market_data = self._instrument.get_market_data_at_closest_trading_day(date)
-            price_at_date = market_data['close']
+            price_at_date = self.get_value_at_date(date)
         
         return (price_at_date - self.buy_price) * self.volume
     
