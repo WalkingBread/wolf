@@ -40,7 +40,7 @@ class ModelProvider(ABC):
         return self._embeddings
     
     
-LANGUAGE_MODEL = 'gpt-4o'
+LANGUAGE_MODEL = 'gpt-5'
 EMBEDDING_MODEL = 'text-embedding-3-small'
 
 class AzureModelProvider(ModelProvider):
