@@ -42,5 +42,17 @@ class FinancialHealthAnalyst(ComponentAnalyst):
                                        for key, value in financial_health.items()])
     
         return {
-            "financial_health_data": formatted_context
+            "financial_health": formatted_context
+        }
+    
+class FinancialMetricsAnalyst(ComponentAnalyst):
+
+    def _prepare_context(self, instrument):
+        financial_metrics = instrument.get_financial_metrics()
+
+        formatted_context = "\n".join([f"- {key.replace('_', ' ').title()}: {value}" 
+                                       for key, value in financial_metrics.items()])
+        
+        return {
+            "financial_metrics": formatted_context
         }

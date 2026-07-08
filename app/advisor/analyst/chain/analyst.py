@@ -17,7 +17,32 @@ class FinancialHealthAnalystChain(BaseChainWrapper):
         
         human_template = (
             "Please analyze the following financial health metrics for a given company:\n\n"
-            "{financial_health_data}\n\n"
+            "{financial_health}\n\n"
+            "Provide a definitive BUY or SELL recommendation with a detailed, point-by-point financial reasoning."
+        )
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_template),
+            ("human", human_template)
+        ])
+
+        return prompt | self.llm.with_structured_output(AnalystDecision)
+    
+class FinancialMetricsAnalystChain(BaseChainWrapper):
+
+    def _compile_chain(self) -> Runnable:
+        system_template = (
+            "You are an expert Equity Research Analyst specializing in market valuation metrics.\n"
+            "Your task is to determine whether a stock is overvalued, undervalued, or fairly priced.\n"
+            "Analyze metrics such as Trailing P/E vs Forward P/E (to see earnings momentum), "
+            "PEG Ratio (valuation relative to growth, where < 1.0 is often undervalued), "
+            "Price-to-Book (P/B), Dividend Yield, and Beta (systematic risk).\n"
+            "Contextualize your decision in terms of margin of safety and risk-return profile."
+        )
+        
+        human_template = (
+            "Please evaluate the following market valuation metrics for a given company:\n\n"
+            "{financial_metrics}\n\n"
             "Provide a definitive BUY or SELL recommendation with a detailed, point-by-point financial reasoning."
         )
         

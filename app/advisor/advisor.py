@@ -1,6 +1,9 @@
 from app.advisor.genai import ModelProvider
 from app.advisor.analyst.model import AnalystDecision
-from app.advisor.analyst.autonomous import FinancialHealthAnalyst
+from app.advisor.analyst.autonomous import (
+    FinancialHealthAnalyst, 
+    FinancialMetricsAnalyst
+)
 
 from app.data.instrument.instrument import Instrument
 
@@ -14,13 +17,15 @@ class AnalysisType(Enum):
         return name.upper()
     
     FINANCIAL_HEALTH = auto()
+    FINANCIAL_METRICS = auto()
 
 class InvestingAdvisor:
     def __init__(self, model_provider: ModelProvider):
         self._model_provider = model_provider
         
         self._analysts = {
-            AnalysisType.FINANCIAL_HEALTH: FinancialHealthAnalyst(self._model_provider.llm)
+            AnalysisType.FINANCIAL_HEALTH: FinancialHealthAnalyst(self._model_provider.llm),
+            AnalysisType.FINANCIAL_METRICS: FinancialMetricsAnalyst(self._model_provider.llm)
         }
 
     def analyze_instrument(self, instrument: Instrument) -> dict:

@@ -137,7 +137,7 @@ class Instrument:
         }
         
     
-    def get_indicators_values(self) -> dict:
+    def get_financial_metrics(self) -> dict:
         info = self.info
         return {
             "trailing_pe": info.get("trailingPE"),       # Price-to-Earnings (Past year)

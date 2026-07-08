@@ -10,7 +10,7 @@ instrument: Instrument = provider.get_instrument('MSFT')
 
 ia = InvestingAdvisor(AzureModelProvider())
 
-print(ia.analyze_financial_health(instrument.get_financial_health()))
+print(ia.analyze_instrument(instrument))
 
 #p = Portfolio('p1')
 
