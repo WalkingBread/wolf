@@ -1,11 +1,18 @@
 from app.advisor.genai import ModelProvider
-from app.advisor.analyst.autonomous import AnalystDecision, FinancialHealthAnalyst
+from app.advisor.analyst.model import AnalystDecision
+from app.advisor.analyst.autonomous import FinancialHealthAnalyst
 
 from app.data.instrument.instrument import Instrument
 
 from enum import Enum, auto
 
-class AnalystType(Enum):
+class AnalysisTypeNotSupportedError(Exception):
+    pass
+
+class AnalysisType(Enum):
+    def _generate_next_value_(name, _start, _count, _last_values):
+        return name.upper()
+    
     FINANCIAL_HEALTH = auto()
 
 class InvestingAdvisor:
@@ -13,17 +20,24 @@ class InvestingAdvisor:
         self._model_provider = model_provider
         
         self._analysts = {
-            AnalystType.FINANCIAL_HEALTH: FinancialHealthAnalyst(self._model_provider.llm)
+            AnalysisType.FINANCIAL_HEALTH: FinancialHealthAnalyst(self._model_provider.llm)
         }
 
-    def analyze_instrument(self, instrument: Instrument)
+    def analyze_instrument(self, instrument: Instrument) -> dict:
+        analysis_result = {}
+        for analyst in self._analysts.values():
+            component_analysis_result: AnalystDecision = analyst.analyze(instrument)
+            analysis_result[analyst.__class__.__name__] = component_analysis_result.model_dump(mode='json')
 
-    def analyze_financial_health(self, financial_health_data: dict) -> str:
-        formatted_context = "\n".join([f"- {key.replace('_', ' ').title()}: {value}" 
-                                       for key, value in financial_health_data.items()])
+        return analysis_result
+
+    def analyze_instrument_component(self, analysis_type: AnalysisType, instrument: Instrument) -> dict:
+        analyst = self._analysts.get(analysis_type)
+        if not analyst:
+            raise AnalysisTypeNotSupportedError(
+                f"Unsupported analysis type: '{analysis_type}'. "
+                f"No corresponding analyst instance registered."
+            )
+        analysis_result = analyst.analyze(instrument)    
+        return analysis_result.model_dump(mode='json')
     
-        decision: AnalystDecision = self._analysts[AnalystType.FINANCIAL_HEALTH].invoke({
-            "financial_health_data": formatted_context
-        })
-
-        return decision.model_dump(mode='json')

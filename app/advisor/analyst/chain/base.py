@@ -4,9 +4,9 @@ from langchain_core.runnables import Runnable, RunnableLambda
 
 from app.logger.config import get_logger
 
-logger = get_logger(stdout=False)
+logger = get_logger(logger_name='LangChain', stdout=False)
 
-class InstrumentAnalyst(ABC):
+class BaseChainWrapper(ABC):
     def __init__(self, llm: BaseChatModel):
         self.llm = llm
         self._chain = None

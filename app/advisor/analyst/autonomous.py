@@ -1,40 +1,46 @@
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import Runnable
+from abc import ABC, abstractmethod
 
-from pydantic import BaseModel, Field
-from typing import Union, Literal, Annotated
-from enum import Enum
+from langchain_core.language_models.chat_models import BaseChatModel
 
-from app.advisor.analyst.base import InstrumentAnalyst
+from app.data.instrument.instrument import Instrument
+from app.advisor.analyst.model import AnalystDecision
+from app.advisor.analyst.chain.base import BaseChainWrapper
 
-class MarketAction(str, Enum):
-    BUY = "BUY"
-    SELL = "SELL"
+import app.advisor.analyst.chain.analyst as chain_module
 
-class AnalystDecision(BaseModel):
-    decision: MarketAction = Field(..., description="Should the instrument be acquired or disposed based on provided data?")
-    reasoning: list[str] = Field(default_factory=list, description="Reasoning behind the decision delivered as multiple points.")
-    
+class AnalystChainNotFoundError(Exception):
+    pass
 
-class FinancialHealthAnalyst(InstrumentAnalyst):
-    
-    def _compile_chain(self) -> Runnable:
-        system_template = (
-            "You are an expert Financial Analyst specializing in fundamental analysis.\n"
-            "Your task is to analyze the financial health of a company based on the provided corporate metrics.\n"
-            "Assess metrics such as liquidity (quick ratio), profitability (profit margin, ROE), debt levels, "
-            "and growth (revenue growth) to make a final decision."
-        )
+class ComponentAnalyst(ABC):
+    def __init__(self, llm: BaseChatModel):
+        current_class_name = self.__class__.__name__
+        target_chain_name = f"{current_class_name}Chain"
+        chain_class = getattr(chain_module, target_chain_name, None)
         
-        human_template = (
-            "Please analyze the following financial health metrics for a given company:\n\n"
-            "{financial_health_data}\n\n"
-            "Provide a definitive BUY or SELL recommendation with a detailed, point-by-point financial reasoning."
-        )
-        
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_template),
-            ("human", human_template)
-        ])
+        if chain_class is None:
+            raise AnalystChainNotFoundError(
+                f"❌ Couldn't fint chain named '{target_chain_name}' "
+                f"in module '{chain_module.__name__}' for '{current_class_name}'."
+            )
+        self._chain: BaseChainWrapper = chain_class(llm)
 
-        return prompt | self.llm.with_structured_output(AnalystDecision)
+    @abstractmethod
+    def _prepare_context(self, instrument: Instrument) -> dict:
+        pass
+
+    def analyze(self, instrument: Instrument) -> AnalystDecision:
+        ctx = self._prepare_context(instrument)
+        return self._chain.invoke(ctx)
+
+
+class FinancialHealthAnalyst(ComponentAnalyst):
+    
+    def _prepare_context(self, instrument: Instrument) -> dict:
+        financial_health = instrument.get_financial_health()
+
+        formatted_context = "\n".join([f"- {key.replace('_', ' ').title()}: {value}" 
+                                       for key, value in financial_health.items()])
+    
+        return {
+            "financial_health_data": formatted_context
+        }
