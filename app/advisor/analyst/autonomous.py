@@ -11,7 +11,7 @@ import app.advisor.analyst.chain.analyst as chain_module
 class AnalystChainNotFoundError(Exception):
     pass
 
-class ComponentAnalyst(ABC):
+class Analyst(ABC):
     def __init__(self, llm: BaseChatModel):
         current_class_name = self.__class__.__name__
         target_chain_name = f"{current_class_name}Chain"
@@ -19,10 +19,13 @@ class ComponentAnalyst(ABC):
         
         if chain_class is None:
             raise AnalystChainNotFoundError(
-                f"❌ Couldn't fint chain named '{target_chain_name}' "
+                f"❌ Couldn't find chain named '{target_chain_name}' "
                 f"in module '{chain_module.__name__}' for '{current_class_name}'."
             )
         self._chain: BaseChainWrapper = chain_class(llm)
+
+
+class ComponentAnalyst(Analyst):
 
     @abstractmethod
     def _prepare_context(self, instrument: Instrument) -> dict:
@@ -56,3 +59,21 @@ class FinancialMetricsAnalyst(ComponentAnalyst):
         return {
             "financial_metrics": formatted_context
         }
+    
+class GeneralAnalyst(Analyst):
+    
+    def analyze(self, joint_analyst_report: dict) -> AnalystDecision:
+        report_blocks = []
+        for analyst, report in joint_analyst_report.items():
+            report_block = (
+                f"=== ANALYST: {analyst} ===\n"
+                f"Recommendation: {report['decision']}\n"
+                f"Key Arguments:\n" + "\n".join([f" - {point}" for point in report['reasoning']])
+            )
+            report_blocks.append(report_block)
+        
+        aggregated_reports = "\n\n".join(report_blocks)
+
+        return self._chain.invoke({
+            "analyst_report": aggregated_reports
+        })

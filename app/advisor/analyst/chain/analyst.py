@@ -52,3 +52,27 @@ class FinancialMetricsAnalystChain(BaseChainWrapper):
         ])
 
         return prompt | self.llm.with_structured_output(AnalystDecision)
+    
+class GeneralAnalystChain(BaseChainWrapper):
+
+    def _compile_chain(self) -> Runnable:
+        system_template = (
+            "You are the Chief Investment Officer (CIO) and Chairman of the Investment Committee.\n"
+            "Your job is to review reports submitted by your specialist sub-analysts.\n"
+            "Your role is to resolve conflicts. For example, if a stock has amazing financial health "
+            "but terrible technical momentum, you must decide whether to sell (SELL) or buy the dip (BUY).\n"
+            "Be conservative, manage risk."
+        )
+        
+        human_template = (
+            "Review the analyst submissions:\n\n"
+            "{analyst_report}"
+            "Deliver the final executive verdict based on the provided information."
+        )
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_template),
+            ("human", human_template)
+        ])
+
+        return prompt | self.llm.with_structured_output(AnalystDecision)

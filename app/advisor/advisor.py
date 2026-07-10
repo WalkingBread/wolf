@@ -2,9 +2,9 @@ from app.advisor.genai import ModelProvider
 from app.advisor.analyst.model import AnalystDecision
 from app.advisor.analyst.autonomous import (
     FinancialHealthAnalyst, 
-    FinancialMetricsAnalyst
+    FinancialMetricsAnalyst,
+    GeneralAnalyst
 )
-
 from app.data.instrument.instrument import Instrument
 
 from enum import Enum, auto
@@ -27,6 +27,7 @@ class InvestingAdvisor:
             AnalysisType.FINANCIAL_HEALTH: FinancialHealthAnalyst(self._model_provider.llm),
             AnalysisType.FINANCIAL_METRICS: FinancialMetricsAnalyst(self._model_provider.llm)
         }
+        self._general_analyst = GeneralAnalyst(self._model_provider.llm)
 
     def analyze_instrument(self, instrument: Instrument) -> dict:
         analysis_result = {}
@@ -34,7 +35,8 @@ class InvestingAdvisor:
             component_analysis_result: AnalystDecision = analyst.analyze(instrument)
             analysis_result[analyst.__class__.__name__] = component_analysis_result.model_dump(mode='json')
 
-        return analysis_result
+        final_decision = self._general_analyst.analyze(analysis_result)
+        return final_decision.model_dump(mode='json')
 
     def analyze_instrument_component(self, analysis_type: AnalysisType, instrument: Instrument) -> dict:
         analyst = self._analysts.get(analysis_type)
