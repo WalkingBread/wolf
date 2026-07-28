@@ -11,6 +11,7 @@ class PortfolioModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    currency: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     assets: Mapped[list["AssetModel"]] = relationship(
@@ -28,6 +29,7 @@ class AssetModel(Base):
     symbol: Mapped[str] = mapped_column(String(20), index=True)
     volume: Mapped[float] = mapped_column(Float)
     buy_price: Mapped[float] = mapped_column(Float)
+    currency: Mapped[str] = mapped_column(String)
     purchase_date: Mapped[datetime] = mapped_column(DateTime)
 
     portfolio: Mapped["PortfolioModel"] = relationship(back_populates="assets")

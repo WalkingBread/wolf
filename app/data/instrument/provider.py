@@ -9,6 +9,10 @@ INSTRUMENT_SYMBOLS = [
 class InstrumentProvider:
     def __init__(self, instrument_symbols = INSTRUMENT_SYMBOLS):
         self._instruments = self._init_instruments(instrument_symbols)
+
+    @property
+    def instrument_symbols(self):
+        return list(self._instruments.keys())
         
     def _init_instruments(self, instrument_symbols: list[str]) -> dict[Instrument]:
         instruments = {}
@@ -18,3 +22,4 @@ class InstrumentProvider:
 
     def get_instrument(self, symbol) -> Instrument:
         return self._instruments.get(symbol)
+    

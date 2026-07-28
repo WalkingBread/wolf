@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.data.instrument.instrument import Instrument
 
-from app.persistance.models import Base, PortfolioModel, AssetModel
+from app.persistence.models import Base, PortfolioModel, AssetModel
 from app.portfolio.asset import Portfolio, Asset  
 
 class PortfolioRepository:
@@ -17,7 +17,10 @@ class PortfolioRepository:
             db_portfolio = session.query(PortfolioModel).filter_by(name=portfolio.name).first()
             
             if not db_portfolio:
-                db_portfolio = PortfolioModel(name=portfolio.name)
+                db_portfolio = PortfolioModel(
+                    name=portfolio.name, 
+                    currency=portfolio.currency
+                )
                 session.add(db_portfolio)
                 session.flush()
 
@@ -27,6 +30,7 @@ class PortfolioRepository:
                     symbol=asset.symbol,
                     volume=asset.volume,
                     buy_price=asset.buy_price,
+                    currency=asset.currency,
                     purchase_date=asset.purchase_date
                 )
                 db_portfolio.assets.append(db_asset)
@@ -39,7 +43,10 @@ class PortfolioRepository:
             if not db_portfolio:
                 return None
 
-            portfolio = Portfolio(name=db_portfolio.name)
+            portfolio = Portfolio(
+                name=db_portfolio.name, 
+                currency=db_portfolio.currency
+            )
             
             for db_asset in db_portfolio.assets:
                 instrument: Instrument = instrument_provider.get_instrument(db_asset.symbol)
@@ -53,3 +60,7 @@ class PortfolioRepository:
                 portfolio.add(asset)
 
             return portfolio
+        
+    def get_all_portfolio_names(self) -> list[str]:
+        with self.session_local() as session:
+            return session.scalars(session.query(PortfolioModel.name)).all()

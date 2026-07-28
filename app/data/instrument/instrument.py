@@ -38,6 +38,10 @@ class Instrument:
     @property
     def current_price(self):
         return self.info.get('currentPrice')
+    
+    @property
+    def currency(self):
+        return self.info.get('currency')
 
     def get_news(self, max_workers: int = 3) -> list[dict]:
         try:
