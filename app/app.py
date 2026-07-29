@@ -476,8 +476,6 @@ elif page == "🔍 Instruments Catalog":
         st.markdown(f"### 🤖 AI Investment Analysis")
         st.caption(f"Multi-agent synthesis for **{basic_info.get('long_name', selected_symbol)}** (`{selected_symbol}`)")
 
-        # Fetch advisor instance safely
-        advisor = getattr(provider, "advisor", None) or st.session_state.get("advisor")
         cache_key = f"advisor_res_{selected_symbol}"
         cached_result = st.session_state.get(cache_key)
 
@@ -621,7 +619,6 @@ elif page == "🔍 Instruments Catalog":
             st.markdown("### 🏢 Business Profile")
             st.info(basic_info.get("summary"))
 
-    # TAB 3: FINANCIAL STATEMENTS
     with tab_statements:
         st.markdown("### 📜 Annual Financial Statements")
         stmt_choice = st.selectbox(

@@ -1,10 +1,5 @@
 from app.data.instrument.instrument import Instrument
-
-INSTRUMENT_SYMBOLS = [
-    'PKO.WA',
-    'MSFT',
-    'AAPL'
-]
+from app.data.instrument.symbols import INSTRUMENT_SYMBOLS
 
 class InstrumentProvider:
     def __init__(self, instrument_symbols = INSTRUMENT_SYMBOLS):
