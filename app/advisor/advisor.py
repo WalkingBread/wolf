@@ -47,4 +47,3 @@ class InvestingAdvisor:
             )
         analysis_result = analyst.analyze(instrument)    
         return analysis_result.model_dump(mode='json')
-    

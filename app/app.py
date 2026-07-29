@@ -1,3 +1,5 @@
+# AI-generated UI
+
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -15,6 +17,8 @@ from app.persistence.repository import PortfolioRepository
 from app.data.instrument.provider import InstrumentProvider
 from app.data.currency.converter import CurrencyConverter
 from app.portfolio.asset import Portfolio, Asset
+from app.advisor.advisor import InvestingAdvisor
+from app.advisor.genai import AzureModelProvider
 
 st.set_page_config(
     page_title="Investment Platform",
@@ -47,8 +51,14 @@ def get_repository():
 def get_instrument_provider():
     return InstrumentProvider()
 
+@st.cache_resource
+def get_investing_advisor():
+    return InvestingAdvisor(AzureModelProvider())
+
 repo = get_repository()
 provider = get_instrument_provider()
+
+advisor = get_investing_advisor()
 
 SUPPORTED_CURRENCIES = ["USD", "EUR", "PLN"]
 
@@ -416,11 +426,12 @@ elif page == "🔍 Instruments Catalog":
     # ------------------------------------------
     # DETAILED TABS
     # ------------------------------------------
-    tab_chart, tab_fundamentals, tab_statements, tab_news = st.tabs([
-        "📈 Price & Volume History", 
-        "📊 Fundamentals & Health", 
-        "📜 Financial Statements", 
-        "📰 News & Analysis"
+    tab_chart, tab_fundamentals, tab_statements, tab_news, tab_advisor = st.tabs([
+        "📈 Price & Volume", 
+        "📊 Valuation & Health", 
+        "📜 Statements", 
+        "📰 News",
+        "🤖 AI Advisor"
     ])
 
     # TAB 1: CHARTING
@@ -534,7 +545,6 @@ elif page == "🔍 Instruments Catalog":
             
             if raw_stmt:
                 df_stmt = pd.DataFrame(raw_stmt)
-                # Format datetime column headers if present
                 df_stmt.columns = [
                     col.strftime("%Y-%m-%d") if hasattr(col, "strftime") else str(col) 
                     for col in df_stmt.columns
@@ -558,6 +568,57 @@ elif page == "🔍 Instruments Catalog":
                             st.write(item.get('content') or "No body content parsed.")
                 else:
                     st.info("No news articles found.")
+
+    with tab_advisor:
+        st.markdown(f"### 🤖 AI Investment Analysis for `{selected_symbol}`")
+        st.write(
+            "Synthesizes multi-agent financial models (financial health & valuation metrics) "
+            "into a single unified investment recommendation."
+        )
+
+        run_analysis = st.button("🚀 Run AI Analysis", type="primary")
+
+        if run_analysis:
+            if not advisor:
+                st.error("AI Advisor service is not initialized on the provider or session state.")
+            else:
+                with st.spinner(f"Running multi-agent synthesis for {selected_symbol}..."):
+                    try:
+                        # Full synthesis execution
+                        result = advisor.analyze_instrument(instrument)
+                        st.session_state[f"advisor_res_{selected_symbol}"] = result
+                    except Exception as e:
+                        st.error(f"Analysis failed: {str(e)}")
+
+        # Render stored decision and argumentation if available
+        cached_result = st.session_state.get(f"advisor_res_{selected_symbol}")
+        if cached_result:
+            st.markdown("---")
+            decision = cached_result.get("decision", "HOLD").upper()
+            reasoning_points = cached_result.get("reasoning", [])
+
+            # Formatting Recommendation Banner
+            if decision == "BUY":
+                st.success(f"### 🟢 RECOMMENDATION: **{decision}**", icon="📈")
+            elif decision == "SELL":
+                st.error(f"### 🔴 RECOMMENDATION: **{decision}**", icon="📉")
+            else:
+                st.warning(f"### 🟡 RECOMMENDATION: **{decision}**", icon="⚖️")
+
+            st.markdown("#### 💡 Key Argumentation & Synthesis Reasoning")
+
+            if reasoning_points:
+                for idx, point in enumerate(reasoning_points, 1):
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #1E222A; border-left: 4px solid #29B6F6; padding: 12px 16px; border-radius: 4px; margin-bottom: 8px;">
+                            <strong>Point {idx}:</strong> {point}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+            else:
+                st.info("No detailed reasoning delivered by the model.")
 
 elif page == "➕ Create Portfolio":
     st.title("➕ Create New Portfolio")
