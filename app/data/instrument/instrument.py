@@ -75,16 +75,19 @@ class Instrument:
 
         url = metadata.get('clickThroughUrl', {}).get('url')
 
+        content = ''
         if url:
             article = Article(url)
             article.download()
             article.parse()
 
+            content = article.text
+
         return {
             "title": metadata.get('title'),
             "date": metadata.get('pubDate'),
             "source": metadata.get('provider', {}).get('displayName'),
-            "content": article.text
+            "content": content
         }
     
     def get_basic_info(self) -> dict:
@@ -132,7 +135,7 @@ class Instrument:
         
         closest_day = market_data_df.iloc[0]
         return {
-            "trading_date": closest_day.index[0].strftime("%Y-%m-%d"),
+            "trading_date": market_data_df.index[0].strftime("%Y-%m-%d"),
             "open": round(float(closest_day["Open"]), 2),
             "high": round(float(closest_day["High"]), 2),
             "low": round(float(closest_day["Low"]), 2),
@@ -181,3 +184,8 @@ class Instrument:
                 result[key] = {}
                 
         return result
+    
+    def refresh_data(self):
+        self._ticker = Ticker(self.symbol)
+        self._info = None
+        return self.info

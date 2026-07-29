@@ -16,9 +16,6 @@ from app.data.instrument.provider import InstrumentProvider
 from app.data.currency.converter import CurrencyConverter
 from app.portfolio.asset import Portfolio, Asset
 
-# ==========================================
-# PAGE & THEME CONFIGURATION
-# ==========================================
 st.set_page_config(
     page_title="Investment Platform",
     page_icon="📈",
@@ -55,9 +52,96 @@ provider = get_instrument_provider()
 
 SUPPORTED_CURRENCIES = ["USD", "EUR", "PLN"]
 
-# ==========================================
-# SIDEBAR NAVIGATION
-# ==========================================
+def calculate_historical_portfolio_performance(portfolio, provider, default_days=365):
+    if not getattr(portfolio, "_assets", []):
+        return pd.DataFrame(), pd.DataFrame()
+
+    cur = portfolio.currency
+    converter = CurrencyConverter(cur)
+
+    purchase_dates = []
+    for asset in portfolio._assets:
+        p_date = getattr(asset, 'purchase_date', None)
+        if isinstance(p_date, datetime):
+            p_date = p_date.date()
+        elif isinstance(p_date, str):
+            p_date = datetime.strptime(p_date, "%Y-%m-%d").date()
+        
+        if p_date:
+            purchase_dates.append(p_date)
+
+    if purchase_dates:
+        earliest_acquisition = min(purchase_dates)
+    else:
+        earliest_acquisition = (datetime.now() - timedelta(days=default_days)).date()
+
+    start_date = datetime.combine(earliest_acquisition, datetime.min.time())
+    end_date = datetime.now()
+
+    asset_histories = {}
+    for asset in portfolio._assets:
+        try:
+            hist_df = asset._instrument.get_historical_market_data(start=start_date, end=end_date)
+            if not hist_df.empty and 'Close' in hist_df.columns:
+                hist_df.index = pd.to_datetime(hist_df.index).date
+                
+                asset_pdate = getattr(asset, 'purchase_date', earliest_acquisition)
+                if isinstance(asset_pdate, datetime):
+                    asset_pdate = asset_pdate.date()
+
+                asset_histories[asset.symbol] = (asset, hist_df['Close'], asset_pdate)
+        except Exception:
+            continue
+
+    if not asset_histories:
+        return pd.DataFrame(), pd.DataFrame()
+
+    all_dates = sorted(list(set().union(*[series.index for _, series, _ in asset_histories.values()])))
+    all_dates = [dt for dt in all_dates if dt >= earliest_acquisition]
+
+    portfolio_daily_values = []
+    asset_perf_records = []
+
+    for dt in all_dates:
+        total_day_val = 0.0
+        
+        for symbol, (asset, series, p_date) in asset_histories.items():
+            if dt >= p_date:
+                if dt in series.index:
+                    price_native = float(series.loc[dt])
+                else:
+                    available_series = series[series.index <= dt]
+                    if not available_series.empty:
+                        price_native = float(available_series.iloc[-1])
+                    else:
+                        price_native = float(series.iloc[0])
+
+                price_converted = converter.convert(price_native, asset.currency)
+                position_val = price_converted * asset.volume
+                total_day_val += position_val
+
+                buy_price_converted = converter.convert(asset.buy_price, asset.currency)
+                cost_basis = buy_price_converted * asset.volume
+                pct_return = ((position_val - cost_basis) / cost_basis * 100) if cost_basis != 0 else 0.0
+
+                asset_perf_records.append({
+                    "Date": dt,
+                    "Symbol": symbol,
+                    "Price": price_converted,
+                    "Position Value": position_val,
+                    "Return (%)": pct_return
+                })
+
+        portfolio_daily_values.append({
+            "Date": dt,
+            "Total Portfolio Value": total_day_val
+        })
+
+    df_total_history = pd.DataFrame(portfolio_daily_values)
+    df_assets_history = pd.DataFrame(asset_perf_records)
+
+    return df_total_history, df_assets_history
+
 st.sidebar.title("📌 Navigation")
 page = st.sidebar.radio(
     "Go to",
@@ -66,9 +150,6 @@ page = st.sidebar.radio(
 
 st.sidebar.markdown("---")
 
-# ==========================================
-# PAGE 1: PORTFOLIO DASHBOARD
-# ==========================================
 if page == "💼 Dashboard":
     st.sidebar.subheader("💼 Portfolios")
     
@@ -81,33 +162,49 @@ if page == "💼 Dashboard":
 
     selected_portfolio_name = st.sidebar.selectbox("Select Portfolio", options=available_portfolios)
 
+    portfolio = repo.get_by_name(selected_portfolio_name, instrument_provider=provider)
+
     if st.sidebar.button("🔄 Refresh Market Data", use_container_width=True):
+        for asset in portfolio.assets:
+            asset.instrument.refresh_data()
         st.cache_data.clear()
         st.rerun()
-
-    # Fetch domain portfolio populated with live market data
-    portfolio = repo.get_by_name(selected_portfolio_name, instrument_provider=provider)
 
     if not portfolio or not getattr(portfolio, "_assets", []):
         st.title(f"💼 {selected_portfolio_name}")
         st.warning("This portfolio is empty or could not be loaded properly.")
         st.stop()
 
-    # Read base portfolio metrics
     cur = portfolio.currency
     total_initial = portfolio.initial_value
     total_current = portfolio.value
     total_change = portfolio.get_value_change()
     total_percent = portfolio.get_percent_change() * 100
 
-    assets_data = portfolio.get_assets_data() 
+    assets_data = portfolio.get_assets_data()
+    
+    if not assets_data:
+        for asset in portfolio._assets:
+            change = asset.get_value_change()
+            pct_change = asset.get_percent_change() * 100
+            
+            assets_data.append({
+                "Symbol": asset.symbol,
+                "Name": getattr(asset, 'name', asset.symbol),
+                "Volume": asset.volume,
+                "Buy Price": asset.buy_price,
+                "Current Price": asset.current_price_per_share if hasattr(asset, 'current_price_per_share') else getattr(asset._instrument, 'current_price', 0.0),
+                "Initial Value": asset.initial_value,
+                "Current Value": asset.value,
+                "Profit / Loss": change,
+                "Return (%)": pct_change
+            })
 
     df = pd.DataFrame(assets_data)
 
     st.title(f"💼 {portfolio.name}")
     st.caption(f"Denominated in **{cur}** | Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    # Top KPI Banner
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     kpi1.metric("Total Invested", f"{total_initial:,.2f} {cur}")
     kpi2.metric("Current Value", f"{total_current:,.2f} {cur}")
@@ -116,6 +213,7 @@ if page == "💼 Dashboard":
 
     st.markdown("---")
 
+    # Allocation & P/L Columns
     col_left, col_right = st.columns(2)
     with col_left:
         st.markdown('<p class="section-header">🍩 Asset Allocation</p>', unsafe_allow_html=True)
@@ -153,17 +251,72 @@ if page == "💼 Dashboard":
             "Profit / Loss": st.column_config.NumberColumn(f"Profit / Loss ({cur})", format="%+.2f"),
             "Value Change": st.column_config.NumberColumn(f"Profit / Loss ({cur})", format="%+.2f"),
             "Return (%)": st.column_config.NumberColumn("Return", format="%+.2f%%"),
+            "Return": st.column_config.NumberColumn("Return", format="%+.2f%%"),
         },
         hide_index=True,
         use_container_width=True
     )
 
-# ==========================================
-# PAGE 2: INSTRUMENTS CATALOG
-# ==========================================
+    st.markdown('<p class="section-header">📈 Performance Over Time</p>', unsafe_allow_html=True)
+    
+    with st.spinner("Fetching historical market trends..."):
+        df_total_history, df_assets_history = calculate_historical_portfolio_performance(portfolio, provider)
+
+    plot_tab1, plot_tab2 = st.tabs(["💰 Total Portfolio Value", "📊 Individual Asset Return Trajectory"])
+
+    with plot_tab1:
+        if not df_total_history.empty:
+            fig_portfolio_trend = px.line(
+                df_total_history,
+                x="Date",
+                y="Total Portfolio Value",
+                title=f"Total Portfolio Value Trend ({cur})"
+            )
+            
+            fig_portfolio_trend.add_hline(
+                y=total_initial, 
+                line_dash="dash", 
+                line_color="#FFA726",
+                annotation_text=f"Initial Invested ({total_initial:,.2f} {cur})"
+            )
+            
+            fig_portfolio_trend.update_traces(line_color="#29B6F6", line_width=2.5)
+            fig_portfolio_trend.update_layout(
+                height=380,
+                template="plotly_dark",
+                margin=dict(l=10, r=10, t=40, b=10),
+                xaxis_title="Date",
+                yaxis_title=f"Portfolio Value ({cur})"
+            )
+            st.plotly_chart(fig_portfolio_trend, use_container_width=True)
+        else:
+            st.info("Unable to generate historical timeline for the total portfolio.")
+
+    with plot_tab2:
+        if not df_assets_history.empty:
+            fig_assets_trend = px.line(
+                df_assets_history,
+                x="Date",
+                y="Return (%)",
+                color="Symbol",
+                title="Asset Return (%) Trajectory over Time"
+            )
+            fig_assets_trend.add_hline(y=0, line_dash="solid", line_color="#888888")
+            fig_assets_trend.update_layout(
+                height=380,
+                template="plotly_dark",
+                margin=dict(l=10, r=10, t=40, b=10),
+                xaxis_title="Date",
+                yaxis_title="Return (%)"
+            )
+            st.plotly_chart(fig_assets_trend, use_container_width=True)
+        else:
+            st.info("Unable to generate historical timeline for individual assets.")
+
+    st.markdown("---")
+
 elif page == "🔍 Instruments Catalog":
-    st.title("🔍 Instrument Explorer & Market Data")
-    st.write("Analyze individual instruments, historical prices, fundamental ratios, and financial statements.")
+    st.sidebar.subheader("🔍 Instrument Selection")
 
     if hasattr(provider, 'instrument_symbols'):
         available_symbols = provider.instrument_symbols
@@ -172,19 +325,36 @@ elif page == "🔍 Instruments Catalog":
     else:
         available_symbols = ['PKO.WA', 'MSFT', 'AAPL']
 
-    col_sym, col_period = st.columns([2, 1])
-    with col_sym:
-        selected_symbol = st.selectbox("Select Instrument to Inspect", options=available_symbols)
-    with col_period:
-        time_frame = st.selectbox("Historical Window", ["1 Month", "6 Months", "1 Year", "5 Years"], index=2)
+    selected_symbol = st.sidebar.selectbox("Select Instrument", options=available_symbols)
+    
+    time_frame = st.sidebar.selectbox(
+        "Historical Window", 
+        ["1 Month", "3 Months", "6 Months", "1 Year", "5 Years"], 
+        index=3
+    )
 
-    period_days_map = {"1 Month": 30, "6 Months": 180, "1 Year": 365, "5 Years": 365 * 5}
+    period_days_map = {
+        "1 Month": 30, 
+        "3 Months": 90, 
+        "6 Months": 180, 
+        "1 Year": 365, 
+        "5 Years": 365 * 5
+    }
     days = period_days_map[time_frame]
     start_date = datetime.now() - timedelta(days=days)
     end_date = datetime.now()
 
+    # Load instrument and domain data
     try:
         instrument = provider.get_instrument(selected_symbol)
+        
+        # Sidebar force refresh option
+        if st.sidebar.button("🔄 Refresh Instrument Data", use_container_width=True):
+            instrument.refresh_data()
+            st.cache_data.clear()
+            st.toast(f"Data refreshed for {selected_symbol}!", icon="✅")
+            st.rerun()
+
         basic_info = instrument.get_basic_info()
         market_data = instrument.get_current_market_data()
         financial_metrics = instrument.get_financial_metrics()
@@ -193,23 +363,49 @@ elif page == "🔍 Instruments Catalog":
         st.error(f"Failed to load data for {selected_symbol}: {e}")
         st.stop()
 
-    st.markdown(f"## {basic_info.get('long_name') or selected_symbol} (`{selected_symbol}`)")
-    st.caption(f"Sector: **{basic_info.get('sector', 'N/A')}** | Industry: **{basic_info.get('industry', 'N/A')}** | Currency: **{basic_info.get('currency', 'USD')}**")
+    # ------------------------------------------
+    # HEADER & HERO BANNER
+    # ------------------------------------------
+    st.title(f"🔍 {basic_info.get('long_name') or selected_symbol}")
+    
+    st.caption(
+        f"**Ticker:** `{selected_symbol}` | "
+        f"**Sector:** {basic_info.get('sector', 'N/A')} | "
+        f"**Industry:** {basic_info.get('industry', 'N/A')} | "
+        f"**Currency:** {basic_info.get('currency', 'USD')}"
+    )
 
     st.markdown("---")
 
+    # Top KPI Bar
     c1, c2, c3, c4, c5 = st.columns(5)
+    
     curr_price = market_data.get("current_price") or 0.0
     prev_close = market_data.get("previous_close") or curr_price
     price_change = curr_price - prev_close
     pct_change = (price_change / prev_close * 100) if prev_close else 0.0
 
-    c1.metric("Current Price", f"{curr_price:,.2f} {basic_info.get('currency', '')}", delta=f"{pct_change:+.2f}%")
-    c2.metric("Day Range", f"{market_data.get('day_low', 0):,.2f} - {market_data.get('day_high', 0):,.2f}")
-    c3.metric("52-Wk Range", f"{market_data.get('fifty_two_week_low', 0):,.2f} - {market_data.get('fifty_two_week_high', 0):,.2f}")
+    c1.metric(
+        "Current Price", 
+        f"{curr_price:,.2f} {basic_info.get('currency', '')}", 
+        delta=f"{pct_change:+.2f}%"
+    )
+    c2.metric(
+        "Day Range", 
+        f"{market_data.get('day_low', 0):,.2f} - {market_data.get('day_high', 0):,.2f}"
+    )
+    c3.metric(
+        "52-Wk Range", 
+        f"{market_data.get('fifty_two_week_low', 0):,.2f} - {market_data.get('fifty_two_week_high', 0):,.2f}"
+    )
     
     mcap = market_data.get("market_cap")
-    mcap_str = f"${mcap/1e9:,.2f}B" if mcap and mcap > 1e9 else (f"${mcap/1e6:,.2f}M" if mcap else "N/A")
+    if mcap and mcap >= 1e9:
+        mcap_str = f"${mcap/1e9:,.2f}B"
+    elif mcap and mcap >= 1e6:
+        mcap_str = f"${mcap/1e6:,.2f}M"
+    else:
+        mcap_str = "N/A"
     c4.metric("Market Cap", mcap_str)
     
     pe_ratio = financial_metrics.get("trailing_pe")
@@ -217,19 +413,24 @@ elif page == "🔍 Instruments Catalog":
 
     st.markdown("---")
 
+    # ------------------------------------------
+    # DETAILED TABS
+    # ------------------------------------------
     tab_chart, tab_fundamentals, tab_statements, tab_news = st.tabs([
-        "📈 Price History", 
-        "📊 Valuation & Health", 
+        "📈 Price & Volume History", 
+        "📊 Fundamentals & Health", 
         "📜 Financial Statements", 
-        "📰 News Feed"
+        "📰 News & Analysis"
     ])
 
+    # TAB 1: CHARTING
     with tab_chart:
-        st.subheader("Historical Stock Price")
         try:
             hist_df = instrument.get_historical_market_data(start=start_date, end=end_date)
             if not hist_df.empty:
-                chart_type = st.radio("Chart Type", ["Line Chart", "Candlestick"], horizontal=True)
+                c_type, _ = st.columns([1, 3])
+                with c_type:
+                    chart_type = st.radio("Chart View", ["Line Chart", "Candlestick"], horizontal=True)
 
                 if chart_type == "Candlestick":
                     fig = go.Figure(data=[go.Candlestick(
@@ -241,45 +442,59 @@ elif page == "🔍 Instruments Catalog":
                         name=selected_symbol
                     )])
                 else:
-                    fig = px.line(hist_df, x=hist_df.index, y="Close", title=f"{selected_symbol} Close Price History")
+                    fig = px.line(
+                        hist_df, 
+                        x=hist_df.index, 
+                        y="Close", 
+                        title=f"{selected_symbol} Price History ({time_frame})"
+                    )
                 
                 fig.update_layout(
-                    height=450, 
+                    height=420, 
                     template="plotly_dark", 
-                    margin=dict(l=10, r=10, t=30, b=10),
+                    margin=dict(l=10, r=10, t=35, b=10),
                     xaxis_title="Date",
                     yaxis_title=f"Price ({basic_info.get('currency', 'USD')})"
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
+                # Volume Subchart
                 fig_vol = px.bar(hist_df, x=hist_df.index, y="Volume", title="Trading Volume")
-                fig_vol.update_layout(height=200, template="plotly_dark", margin=dict(l=10, r=10, t=30, b=10))
+                fig_vol.update_traces(marker_color="#29B6F6")
+                fig_vol.update_layout(
+                    height=180, 
+                    template="plotly_dark", 
+                    margin=dict(l=10, r=10, t=30, b=10),
+                    xaxis_title="",
+                    yaxis_title="Volume"
+                )
                 st.plotly_chart(fig_vol, use_container_width=True)
             else:
-                st.warning("No historical market data returned for the selected time window.")
+                st.info("No historical price data returned for this window.")
         except Exception as e:
             st.error(f"Error rendering price chart: {e}")
 
+    # TAB 2: FUNDAMENTALS & HEALTH
     with tab_fundamentals:
-        col_val, col_health = st.columns(2)
+        col_val, col_health = st.columns(2, gap="large")
         
         with col_val:
-            st.subheader("Valuation Metrics")
+            st.markdown("### 📊 Valuation Ratios")
             val_df = pd.DataFrame([
-                {"Metric": "Trailing P/E", "Value": financial_metrics.get("trailing_pe")},
-                {"Metric": "Forward P/E", "Value": financial_metrics.get("forward_pe")},
-                {"Metric": "PEG Ratio", "Value": financial_metrics.get("peg_ratio")},
-                {"Metric": "Price-to-Book", "Value": financial_metrics.get("price_to_book")},
+                {"Metric": "Trailing P/E", "Value": f"{financial_metrics.get('trailing_pe'):.2f}" if financial_metrics.get('trailing_pe') else "N/A"},
+                {"Metric": "Forward P/E", "Value": f"{financial_metrics.get('forward_pe'):.2f}" if financial_metrics.get('forward_pe') else "N/A"},
+                {"Metric": "PEG Ratio", "Value": f"{financial_metrics.get('peg_ratio'):.2f}" if financial_metrics.get('peg_ratio') else "N/A"},
+                {"Metric": "Price-to-Book", "Value": f"{financial_metrics.get('price_to_book'):.2f}" if financial_metrics.get('price_to_book') else "N/A"},
                 {"Metric": "Dividend Yield", "Value": f"{financial_metrics.get('dividend_yield', 0) * 100:.2f}%" if financial_metrics.get('dividend_yield') else "N/A"},
-                {"Metric": "Beta (Volatility)", "Value": financial_metrics.get("beta")}
+                {"Metric": "Beta (Volatility)", "Value": f"{financial_metrics.get('beta'):.2f}" if financial_metrics.get('beta') else "N/A"}
             ])
             st.dataframe(val_df, hide_index=True, use_container_width=True)
 
         with col_health:
-            st.subheader("Financial Health")
+            st.markdown("### 🏥 Financial Health")
             
             def format_num(val):
-                if not val: return "N/A"
+                if not val or pd.isna(val): return "N/A"
                 if abs(val) >= 1e9: return f"${val/1e9:,.2f}B"
                 if abs(val) >= 1e6: return f"${val/1e6:,.2f}M"
                 return f"${val:,.2f}"
@@ -290,18 +505,23 @@ elif page == "🔍 Instruments Catalog":
                 {"Metric": "EBITDA", "Value": format_num(financial_health.get("ebitda"))},
                 {"Metric": "Profit Margin", "Value": f"{financial_health.get('profit_margin', 0) * 100:.2f}%" if financial_health.get('profit_margin') else "N/A"},
                 {"Metric": "Total Debt", "Value": format_num(financial_health.get("total_debt"))},
-                {"Metric": "Quick Ratio", "Value": financial_health.get("quick_ratio")},
+                {"Metric": "Quick Ratio", "Value": f"{financial_health.get('quick_ratio'):.2f}" if financial_health.get('quick_ratio') else "N/A"},
                 {"Metric": "ROE (Return on Equity)", "Value": f"{financial_health.get('return_on_equity', 0) * 100:.2f}%" if financial_health.get('return_on_equity') else "N/A"}
             ])
             st.dataframe(health_df, hide_index=True, use_container_width=True)
 
         if basic_info.get("summary"):
-            st.subheader("Business Summary")
+            st.markdown("---")
+            st.markdown("### 🏢 Business Profile")
             st.info(basic_info.get("summary"))
 
+    # TAB 3: FINANCIAL STATEMENTS
     with tab_statements:
-        st.subheader("Financial Statements")
-        stmt_choice = st.selectbox("Select Statement", ["Income Statement", "Balance Sheet", "Cash Flow"])
+        st.markdown("### 📜 Annual Financial Statements")
+        stmt_choice = st.selectbox(
+            "Statement Type", 
+            ["Income Statement", "Balance Sheet", "Cash Flow"]
+        )
         
         try:
             statements = instrument.get_financial_statements()
@@ -314,16 +534,22 @@ elif page == "🔍 Instruments Catalog":
             
             if raw_stmt:
                 df_stmt = pd.DataFrame(raw_stmt)
+                # Format datetime column headers if present
+                df_stmt.columns = [
+                    col.strftime("%Y-%m-%d") if hasattr(col, "strftime") else str(col) 
+                    for col in df_stmt.columns
+                ]
                 st.dataframe(df_stmt, use_container_width=True)
             else:
                 st.info(f"No {stmt_choice} data available for {selected_symbol}.")
         except Exception as e:
             st.error(f"Error fetching financial statements: {e}")
 
+    # TAB 4: NEWS FEED
     with tab_news:
-        st.subheader(f"Latest News for {selected_symbol}")
-        if st.button("📰 Fetch Latest News"):
-            with st.spinner("Scraping and parsing news articles..."):
+        st.markdown(f"### 📰 Latest News for {selected_symbol}")
+        if st.button("📰 Fetch / Refresh News"):
+            with st.spinner("Scraping and parsing articles..."):
                 news_items = instrument.get_news(max_workers=3)
                 if news_items:
                     for item in news_items[:5]:
@@ -333,9 +559,6 @@ elif page == "🔍 Instruments Catalog":
                 else:
                     st.info("No news articles found.")
 
-# ==========================================
-# PAGE 3: PORTFOLIO CREATOR (CURRENCY-CONVERTER INTEGRATED)
-# ==========================================
 elif page == "➕ Create Portfolio":
     st.title("➕ Create New Portfolio")
 
@@ -344,9 +567,6 @@ elif page == "➕ Create Portfolio":
     if "draft_positions" not in st.session_state:
         st.session_state.draft_positions = []
 
-    # ------------------------------------------
-    # TOP TOOLBAR: METADATA & BASE CURRENCY
-    # ------------------------------------------
     c_meta1, c_meta2 = st.columns([2, 1])
 
     with c_meta1:
@@ -357,7 +577,7 @@ elif page == "➕ Create Portfolio":
         )
 
     if "portfolio_base_currency" not in st.session_state:
-        st.session_state.portfolio_base_currency = "USD"
+        st.session_state.portfolio_base_currency = "PLN"
 
     # Callback when portfolio currency changes
     def sync_inputs_on_base_currency_change():
@@ -368,10 +588,10 @@ elif page == "➕ Create Portfolio":
         try:
             inst = provider.get_instrument(selected_symbol)
             native_price = float(inst.current_price) if inst and inst.current_price else 0.0
-            native_ccy = inst.get_basic_info().get('currency', 'USD') if inst else 'USD'
+            native_ccy = inst.get_basic_info().get('currency', 'PLN') if inst else 'PLN'
         except Exception:
             native_price = 0.0
-            native_ccy = 'USD'
+            native_ccy = 'PLN'
 
         converted_price = converter.convert(native_price, native_ccy)
         st.session_state.pos_price_input = converted_price
@@ -388,9 +608,6 @@ elif page == "➕ Create Portfolio":
 
     active_converter = CurrencyConverter(base_currency)
 
-    # ------------------------------------------
-    # CALLBACKS FOR 3-INPUT SYNCHRONIZATION
-    # ------------------------------------------
     def sync_on_instrument_change():
         selected = st.session_state.pos_symbol_select
         target_ccy = st.session_state.portfolio_base_currency
@@ -576,7 +793,6 @@ elif page == "➕ Create Portfolio":
                         st.error("Please enter a portfolio name.")
                     else:
                         try:
-                            # Instantiate domain Portfolio
                             new_portfolio = Portfolio(
                                 name=portfolio_name_input.strip(), 
                                 currency=base_currency
@@ -585,20 +801,15 @@ elif page == "➕ Create Portfolio":
                             for pos in st.session_state.draft_positions:
                                 inst = provider.get_instrument(pos["symbol"])
                                 
-                                # ----------------------------------------------------
-                                # FIX: Get native currency and convert UI buy_price 
-                                # back to instrument's native currency before saving
-                                # ----------------------------------------------------
                                 native_currency = inst.get_basic_info().get('currency', 'USD') if inst else 'USD'
                                 native_converter = CurrencyConverter(native_currency)
-                                
-                                # Convert buy_price from base_currency -> native_currency
+
                                 native_buy_price = native_converter.convert(pos["buy_price"], base_currency)
 
                                 asset = Asset(
                                     instrument=inst, 
                                     volume=pos["volume"], 
-                                    buy_price=native_buy_price,  # <--- Pass native price!
+                                    buy_price=native_buy_price,
                                     purchase_date=pos["purchase_date"]
                                 )
                                 

@@ -12,6 +12,10 @@ class Asset:
         self.purchase_date = purchase_date
 
     @property
+    def instrument(self):
+        return self._instrument
+
+    @property
     def name(self) -> str:
         return self._instrument.full_name
     
@@ -55,6 +59,10 @@ class Portfolio:
         self.name = name
         self._converter = CurrencyConverter(currency)
         self._assets: list[Asset] = []
+
+    @property
+    def assets(self):
+        return self._assets
 
     @property
     def currency(self):
