@@ -328,12 +328,7 @@ if page == "💼 Dashboard":
 elif page == "🔍 Instruments Catalog":
     st.sidebar.subheader("🔍 Instrument Selection")
 
-    if hasattr(provider, 'instrument_symbols'):
-        available_symbols = provider.instrument_symbols
-    elif hasattr(provider, '_instruments'):
-        available_symbols = list(provider._instruments.keys())
-    else:
-        available_symbols = ['PKO.WA', 'MSFT', 'AAPL']
+    available_symbols = provider.instrument_symbols
 
     selected_symbol = st.sidebar.selectbox("Select Instrument", options=available_symbols)
     
@@ -373,9 +368,6 @@ elif page == "🔍 Instruments Catalog":
         st.error(f"Failed to load data for {selected_symbol}: {e}")
         st.stop()
 
-    # ------------------------------------------
-    # HEADER & HERO BANNER
-    # ------------------------------------------
     st.title(f"🔍 {basic_info.get('long_name') or selected_symbol}")
     
     st.caption(
@@ -423,18 +415,14 @@ elif page == "🔍 Instruments Catalog":
 
     st.markdown("---")
 
-    # ------------------------------------------
-    # DETAILED TABS
-    # ------------------------------------------
-    tab_chart, tab_fundamentals, tab_statements, tab_news, tab_advisor = st.tabs([
+    tab_chart, tab_advisor, tab_fundamentals, tab_statements, tab_news = st.tabs([
         "📈 Price & Volume", 
+        "🤖 AI Advisor",
         "📊 Valuation & Health", 
         "📜 Statements", 
-        "📰 News",
-        "🤖 AI Advisor"
+        "📰 News"
     ])
 
-    # TAB 1: CHARTING
     with tab_chart:
         try:
             hist_df = instrument.get_historical_market_data(start=start_date, end=end_date)
@@ -469,7 +457,6 @@ elif page == "🔍 Instruments Catalog":
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Volume Subchart
                 fig_vol = px.bar(hist_df, x=hist_df.index, y="Volume", title="Trading Volume")
                 fig_vol.update_traces(marker_color="#29B6F6")
                 fig_vol.update_layout(
@@ -485,7 +472,115 @@ elif page == "🔍 Instruments Catalog":
         except Exception as e:
             st.error(f"Error rendering price chart: {e}")
 
-    # TAB 2: FUNDAMENTALS & HEALTH
+    with tab_advisor:
+        st.markdown(f"### 🤖 AI Investment Analysis")
+        st.caption(f"Multi-agent synthesis for **{basic_info.get('long_name', selected_symbol)}** (`{selected_symbol}`)")
+
+        # Fetch advisor instance safely
+        advisor = getattr(provider, "advisor", None) or st.session_state.get("advisor")
+        cache_key = f"advisor_res_{selected_symbol}"
+        cached_result = st.session_state.get(cache_key)
+
+        # Overview banner container
+        with st.container(border=True):
+            col_info, col_actions = st.columns([3, 1], gap="medium")
+            
+            with col_info:
+                st.markdown("**How this works:**")
+                st.markdown(
+                    "This system runs parallel evaluation models (**Financial Health** & **Valuation Metrics**) "
+                    "and feeds their findings into a General Synthesis Analyst to produce an unbiased recommendation."
+                )
+
+            with col_actions:
+                st.markdown(" ")
+                run_analysis = st.button("🚀 Run Analysis", type="primary", use_container_width=True)
+                if cached_result:
+                    if st.button("🔄 Clear Result", use_container_width=True):
+                        del st.session_state[cache_key]
+                        st.rerun()
+
+        # Handle Execution
+        if run_analysis:
+            if not advisor:
+                st.error("⚠️ AI Advisor service is not initialized on the provider or session state.")
+            else:
+                with st.status(f"Analyzing {selected_symbol}...", expanded=True) as status:
+                    st.write("🔍 Extracting financial health & balance sheet context...")
+                    st.write("📊 Evaluating fundamental valuation metrics & ratios...")
+                    st.write("🧠 Synthesizing sub-analyst decisions into final recommendation...")
+                    try:
+                        result = advisor.analyze_instrument(instrument)
+                        st.session_state[cache_key] = result
+                        status.update(label="Analysis complete!", state="complete", expanded=False)
+                        st.rerun()
+                    except Exception as e:
+                        status.update(label="Analysis failed!", state="error", expanded=True)
+                        st.error(f"Error executing advisor: {str(e)}")
+
+        # Render Recommendation & Reasoning Output
+        cached_result = st.session_state.get(cache_key)
+        if cached_result:
+            st.markdown("---")
+            decision = str(cached_result.get("decision", "HOLD")).upper()
+            reasoning_points = cached_result.get("reasoning", [])
+
+            # Clean provider class name (e.g., AzureModelProvider)
+            if hasattr(advisor, '_model_provider'):
+                provider_name = advisor._model_provider.__class__.__name__
+            else:
+                provider_name = "LLM Synthesis Engine"
+
+            # Redesigned Decision & Summary Hero Card
+            with st.container(border=True):
+                col_dec, col_meta = st.columns([1, 2], gap="large")
+                
+                with col_dec:
+                    st.caption("SYNTHESIS DECISION")
+                    if decision == "BUY":
+                        st.markdown(
+                            """<div style="background-color: #1b382b; border: 1px solid #2e6f40; border-radius: 8px; padding: 12px; text-align: center;">
+                                <h2 style="color: #4CAF50; margin: 0; padding: 0;">🟢 BUY</h2>
+                            </div>""", 
+                            unsafe_allow_html=True
+                        )
+                    elif decision == "SELL":
+                        st.markdown(
+                            """<div style="background-color: #3b1c1c; border: 1px solid #7a2b2b; border-radius: 8px; padding: 12px; text-align: center;">
+                                <h2 style="color: #FF5252; margin: 0; padding: 0;">🔴 SELL</h2>
+                            </div>""", 
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown(
+                            """<div style="background-color: #38321b; border: 1px solid #6f622e; border-radius: 8px; padding: 12px; text-align: center;">
+                                <h2 style="color: #FFC107; margin: 0; padding: 0;">🟡 HOLD</h2>
+                            </div>""", 
+                            unsafe_allow_html=True
+                        )
+
+                with col_meta:
+                    st.caption("EVALUATION METADATA")
+                    st.markdown(
+                        f"• Target Symbol: **`{selected_symbol}`**  \n"
+                        f"• Key Findings: **{len(reasoning_points)} Points Identified**  \n"
+                        f"• Engine: **`{provider_name}`**"
+                    )
+
+            st.markdown("### 💡 Decision Rationale")
+
+            # Cleaned Bullet List Output (No Argument labels)
+            if reasoning_points:
+                with st.container(border=True):
+                    for point in reasoning_points:
+                        # Fix formatting issue: Escape raw underscores or single asterisks from LLM outputs
+                        safe_point = point.replace("_", r"\_")
+                        
+                        st.markdown(f"• {safe_point}")
+                        st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
+            else:
+                st.info("No detailed reasoning delivered by the model.")
+
     with tab_fundamentals:
         col_val, col_health = st.columns(2, gap="large")
         
@@ -555,7 +650,6 @@ elif page == "🔍 Instruments Catalog":
         except Exception as e:
             st.error(f"Error fetching financial statements: {e}")
 
-    # TAB 4: NEWS FEED
     with tab_news:
         st.markdown(f"### 📰 Latest News for {selected_symbol}")
         if st.button("📰 Fetch / Refresh News"):
@@ -569,56 +663,6 @@ elif page == "🔍 Instruments Catalog":
                 else:
                     st.info("No news articles found.")
 
-    with tab_advisor:
-        st.markdown(f"### 🤖 AI Investment Analysis for `{selected_symbol}`")
-        st.write(
-            "Synthesizes multi-agent financial models (financial health & valuation metrics) "
-            "into a single unified investment recommendation."
-        )
-
-        run_analysis = st.button("🚀 Run AI Analysis", type="primary")
-
-        if run_analysis:
-            if not advisor:
-                st.error("AI Advisor service is not initialized on the provider or session state.")
-            else:
-                with st.spinner(f"Running multi-agent synthesis for {selected_symbol}..."):
-                    try:
-                        # Full synthesis execution
-                        result = advisor.analyze_instrument(instrument)
-                        st.session_state[f"advisor_res_{selected_symbol}"] = result
-                    except Exception as e:
-                        st.error(f"Analysis failed: {str(e)}")
-
-        # Render stored decision and argumentation if available
-        cached_result = st.session_state.get(f"advisor_res_{selected_symbol}")
-        if cached_result:
-            st.markdown("---")
-            decision = cached_result.get("decision", "HOLD").upper()
-            reasoning_points = cached_result.get("reasoning", [])
-
-            # Formatting Recommendation Banner
-            if decision == "BUY":
-                st.success(f"### 🟢 RECOMMENDATION: **{decision}**", icon="📈")
-            elif decision == "SELL":
-                st.error(f"### 🔴 RECOMMENDATION: **{decision}**", icon="📉")
-            else:
-                st.warning(f"### 🟡 RECOMMENDATION: **{decision}**", icon="⚖️")
-
-            st.markdown("#### 💡 Key Argumentation & Synthesis Reasoning")
-
-            if reasoning_points:
-                for idx, point in enumerate(reasoning_points, 1):
-                    st.markdown(
-                        f"""
-                        <div style="background-color: #1E222A; border-left: 4px solid #29B6F6; padding: 12px 16px; border-radius: 4px; margin-bottom: 8px;">
-                            <strong>Point {idx}:</strong> {point}
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-            else:
-                st.info("No detailed reasoning delivered by the model.")
 
 elif page == "➕ Create Portfolio":
     st.title("➕ Create New Portfolio")
@@ -640,7 +684,6 @@ elif page == "➕ Create Portfolio":
     if "portfolio_base_currency" not in st.session_state:
         st.session_state.portfolio_base_currency = "PLN"
 
-    # Callback when portfolio currency changes
     def sync_inputs_on_base_currency_change():
         selected_symbol = st.session_state.get("pos_symbol_select", available_symbols[0])
         target_ccy = st.session_state.portfolio_base_currency
