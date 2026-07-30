@@ -53,6 +53,83 @@ class FinancialMetricsAnalystChain(BaseChainWrapper):
 
         return prompt | self.llm.with_structured_output(AnalystDecision)
     
+class NewsSentimentAnalystChain(BaseChainWrapper):
+
+    def _compile_chain(self) -> Runnable:
+        system_template = (
+            "You are a Senior Financial Journalist and Market Sentiment Analyst.\n"
+            "Your job is to evaluate recent news coverage, corporate announcements, and press reports "
+            "for a given instrument.\n"
+            "Identify narrative catalysts, regulatory risks, macroeconomic headwinds, or product tailwinds.\n"
+            "Assess whether current market sentiment presents a buying opportunity or a warning signal."
+        )
+
+        human_template = (
+            "Please analyze the following recent news coverage for this instrument:\n\n"
+            "{news_context}\n\n"
+            "Provide a definitive BUY, SELL recommendation based on news sentiment "
+            "and narrative momentum, accompanied by key bullet points explaining your reasoning."
+        )
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_template),
+            ("human", human_template)
+        ])
+
+        return prompt | self.llm.with_structured_output(AnalystDecision)
+
+
+class TechnicalAnalystChain(BaseChainWrapper):
+
+    def _compile_chain(self) -> Runnable:
+        system_template = (
+            "You are an Expert Quantitative Technical Analyst specializing in price action and volume profiles.\n"
+            "Your task is to analyze momentum, relative price range (proximity to 52-week highs or lows), "
+            "and volume anomalies to determine if a stock has technical support or is under distribution.\n"
+            "Help the investment committee avoid 'falling knives' (downtrend value traps) or missing "
+            "strong breakout momentum."
+        )
+
+        human_template = (
+            "Please evaluate the following technical price action and volume metrics:\n\n"
+            "{technical_context}\n\n"
+            "Provide a definitive BUY or SELL recommendation based on technical momentum, "
+            "supported by point-by-point rationale."
+        )
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_template),
+            ("human", human_template)
+        ])
+
+        return prompt | self.llm.with_structured_output(AnalystDecision)
+
+
+class StatementTrendAnalystChain(BaseChainWrapper):
+
+    def _compile_chain(self) -> Runnable:
+        system_template = (
+            "You are a Forensic Accounting Specialist and Fundamental Analyst.\n"
+            "Your role is to evaluate multi-year trend lines across Income Statements, Balance Sheets, "
+            "and Cash Flow Statements.\n"
+            "Look for trajectory indicators: Is revenue growing faster than expenses? Is free cash flow (FCF) "
+            "expanding alongside net income? Are debt obligations compounding over time?"
+        )
+
+        human_template = (
+            "Please review the multi-year historical financial trends for this company:\n\n"
+            "{statement_trends}\n\n"
+            "Provide a definitive BUY or SELL recommendation based on multi-year trajectory "
+            "and quality of earnings, complete with clear argument points."
+        )
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_template),
+            ("human", human_template)
+        ])
+
+        return prompt | self.llm.with_structured_output(AnalystDecision)
+    
 class GeneralAnalystChain(BaseChainWrapper):
 
     def _compile_chain(self) -> Runnable:

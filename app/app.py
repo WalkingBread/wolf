@@ -1,4 +1,6 @@
-# AI-generated UI
+#################################
+#        AI-generated UI        #
+#################################
 
 import sys
 from pathlib import Path
@@ -44,7 +46,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Shared Data Layer Services
 @st.cache_resource
 def get_repository():
     return PortfolioRepository()
@@ -223,7 +224,6 @@ if page == "💼 Dashboard":
 
     st.markdown("---")
 
-    # Allocation & P/L Columns
     col_left, col_right = st.columns(2)
     with col_left:
         st.markdown('<p class="section-header">🍩 Asset Allocation</p>', unsafe_allow_html=True)
@@ -249,7 +249,6 @@ if page == "💼 Dashboard":
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # Detailed Table
     st.markdown('<p class="section-header">📜 Positions Breakdown</p>', unsafe_allow_html=True)
     st.dataframe(
         df,
@@ -350,11 +349,9 @@ elif page == "🔍 Instruments Catalog":
     start_date = datetime.now() - timedelta(days=days)
     end_date = datetime.now()
 
-    # Load instrument and domain data
     try:
         instrument = provider.get_instrument(selected_symbol)
         
-        # Sidebar force refresh option
         if st.sidebar.button("🔄 Refresh Instrument Data", use_container_width=True):
             instrument.refresh_data()
             st.cache_data.clear()
@@ -480,7 +477,6 @@ elif page == "🔍 Instruments Catalog":
         cache_key = f"advisor_res_{selected_symbol}"
         cached_result = st.session_state.get(cache_key)
 
-        # Overview banner container
         with st.container(border=True):
             col_info, col_actions = st.columns([3, 1], gap="medium")
             
@@ -499,15 +495,17 @@ elif page == "🔍 Instruments Catalog":
                         del st.session_state[cache_key]
                         st.rerun()
 
-        # Handle Execution
         if run_analysis:
             if not advisor:
                 st.error("⚠️ AI Advisor service is not initialized on the provider or session state.")
             else:
                 with st.status(f"Analyzing {selected_symbol}...", expanded=True) as status:
-                    st.write("🔍 Extracting financial health & balance sheet context...")
-                    st.write("📊 Evaluating fundamental valuation metrics & ratios...")
-                    st.write("🧠 Synthesizing sub-analyst decisions into final recommendation...")
+                    st.write("🔍 Extracting financial health & liquidity metrics...")
+                    st.write("📊 Evaluating market valuation ratios & growth projections...")
+                    st.write("📰 Scraping & parsing recent news coverage & sentiment...")
+                    st.write("📈 Analyzing price momentum & volume action...")
+                    st.write("📜 Examining multi-year financial statement trajectories...")
+                    st.write("🧠 Synthesizing sub-analyst reports into CIO executive recommendation...")
                     try:
                         result = advisor.analyze_instrument(instrument)
                         st.session_state[cache_key] = result
@@ -517,20 +515,17 @@ elif page == "🔍 Instruments Catalog":
                         status.update(label="Analysis failed!", state="error", expanded=True)
                         st.error(f"Error executing advisor: {str(e)}")
 
-        # Render Recommendation & Reasoning Output
         cached_result = st.session_state.get(cache_key)
         if cached_result:
             st.markdown("---")
             decision = str(cached_result.get("decision", "HOLD")).upper()
             reasoning_points = cached_result.get("reasoning", [])
 
-            # Clean provider class name (e.g., AzureModelProvider)
             if hasattr(advisor, '_model_provider'):
                 provider_name = advisor._model_provider.__class__.__name__
             else:
                 provider_name = "LLM Synthesis Engine"
 
-            # Redesigned Decision & Summary Hero Card
             with st.container(border=True):
                 col_dec, col_meta = st.columns([1, 2], gap="large")
                 

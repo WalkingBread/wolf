@@ -3,6 +3,9 @@ from app.advisor.analyst.model import AnalystDecision
 from app.advisor.analyst.autonomous import (
     FinancialHealthAnalyst, 
     FinancialMetricsAnalyst,
+    StatementTrendAnalyst,
+    NewsSentimentAnalyst,
+    TechnicalAnalyst,
     GeneralAnalyst
 )
 from app.data.instrument.instrument import Instrument
@@ -18,6 +21,9 @@ class AnalysisType(Enum):
     
     FINANCIAL_HEALTH = auto()
     FINANCIAL_METRICS = auto()
+    STATEMENT_TREND = auto()
+    NEWS_SENTIMENT = auto()
+    TECHNICAL = auto()
 
 class InvestingAdvisor:
     def __init__(self, model_provider: ModelProvider):
@@ -25,7 +31,10 @@ class InvestingAdvisor:
         
         self._analysts = {
             AnalysisType.FINANCIAL_HEALTH: FinancialHealthAnalyst(self._model_provider.llm),
-            AnalysisType.FINANCIAL_METRICS: FinancialMetricsAnalyst(self._model_provider.llm)
+            AnalysisType.FINANCIAL_METRICS: FinancialMetricsAnalyst(self._model_provider.llm),
+            AnalysisType.STATEMENT_TREND: StatementTrendAnalyst(self._model_provider.llm),
+            AnalysisType.TECHNICAL: TechnicalAnalyst(self._model_provider.llm),
+            AnalysisType.NEWS_SENTIMENT: NewsSentimentAnalyst(self._model_provider.llm)
         }
         self._general_analyst = GeneralAnalyst(self._model_provider.llm)
 
