@@ -7,7 +7,6 @@ INSTRUMENT_SYMBOLS = [
     # Financials & Banking
     'PKO.WA',   # PKO Bank Polski
     'PEO.WA',   # Bank Pekao
-    'SPL.WA',   # Santander Bank Polska
     'ALR.WA',   # Alior Bank
     'MIL.WA',   # Bank Millennium
     'ING.WA',   # ING Bank Śląski
@@ -29,7 +28,6 @@ INSTRUMENT_SYMBOLS = [
     'ALE.WA',   # Allegro (E-commerce)
     'ZAB.WA',   # Żabka Group
     'PCO.WA',   # Pepco Group
-    'CCC.WA',   # CCC Group (Footwear)
     'RBW.WA',   # Rainbow Tours
 
     # Tech, Telecom, Media & Gaming
@@ -67,6 +65,7 @@ INSTRUMENT_SYMBOLS = [
     'AMZN',     # Amazon
     'META',     # Meta Platforms
     'TSLA',     # Tesla
+    'SPCX',
 
     # Semiconductors & Hardware
     'AMD',      # Advanced Micro Devices

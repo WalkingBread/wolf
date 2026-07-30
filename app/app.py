@@ -20,6 +20,8 @@ from app.portfolio.asset import Portfolio, Asset
 from app.advisor.advisor import InvestingAdvisor
 from app.advisor.genai import AzureModelProvider
 
+SUPPORTED_CURRENCIES = ["USD", "EUR", "PLN"]
+
 st.set_page_config(
     page_title="Investment Platform",
     page_icon="📈",
@@ -60,8 +62,6 @@ provider = get_instrument_provider()
 
 advisor = get_investing_advisor()
 
-SUPPORTED_CURRENCIES = ["USD", "EUR", "PLN"]
-
 def calculate_historical_portfolio_performance(portfolio, provider, default_days=365):
     if not getattr(portfolio, "_assets", []):
         return pd.DataFrame(), pd.DataFrame()
@@ -89,7 +89,7 @@ def calculate_historical_portfolio_performance(portfolio, provider, default_days
     end_date = datetime.now()
 
     asset_histories = {}
-    for asset in portfolio._assets:
+    for asset in portfolio.assets:
         try:
             hist_df = asset._instrument.get_historical_market_data(start=start_date, end=end_date)
             if not hist_df.empty and 'Close' in hist_df.columns:
@@ -328,10 +328,11 @@ if page == "💼 Dashboard":
 elif page == "🔍 Instruments Catalog":
     st.sidebar.subheader("🔍 Instrument Selection")
 
-    available_symbols = provider.instrument_symbols
+    instrument_names_to_symbols = provider.names_to_symbols()
 
-    selected_symbol = st.sidebar.selectbox("Select Instrument", options=available_symbols)
-    
+    selected_instrument = st.sidebar.selectbox("Select Instrument", options=instrument_names_to_symbols.keys())
+    selected_symbol = instrument_names_to_symbols[selected_instrument]
+
     time_frame = st.sidebar.selectbox(
         "Historical Window", 
         ["1 Month", "3 Months", "6 Months", "1 Year", "5 Years"], 
@@ -565,6 +566,7 @@ elif page == "🔍 Instruments Catalog":
                         f"• Engine: **`{provider_name}`**"
                     )
 
+
             st.markdown("### 💡 Decision Rationale")
 
             # Cleaned Bullet List Output (No Argument labels)
@@ -665,6 +667,7 @@ elif page == "➕ Create Portfolio":
     st.title("➕ Create New Portfolio")
 
     available_symbols = provider.instrument_symbols
+    instrument_names_to_symbols = provider.names_to_symbols()
 
     if "draft_positions" not in st.session_state:
         st.session_state.draft_positions = []
@@ -682,7 +685,7 @@ elif page == "➕ Create Portfolio":
         st.session_state.portfolio_base_currency = "PLN"
 
     def sync_inputs_on_base_currency_change():
-        selected_symbol = st.session_state.get("pos_symbol_select", available_symbols[0])
+        selected_symbol = st.session_state.get("pos_symbol_select", instrument_names_to_symbols[instrument_names_to_symbols.keys[0]])
         target_ccy = st.session_state.portfolio_base_currency
         converter = CurrencyConverter(target_ccy)
         
@@ -757,12 +760,14 @@ elif page == "➕ Create Portfolio":
         st.subheader("1. Add Asset")
         
         with st.container(border=True):
-            selected_symbol = st.selectbox(
+            selected_name = st.selectbox(
                 "Instrument", 
-                options=available_symbols, 
+                options=instrument_names_to_symbols.keys(), 
                 key="pos_symbol_select",
                 on_change=sync_on_instrument_change
             )
+
+            selected_symbol = instrument_names_to_symbols[selected_name]
 
             try:
                 inst_obj = provider.get_instrument(selected_symbol)
