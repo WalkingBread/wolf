@@ -12,6 +12,7 @@ from app.data.instrument.instrument import Instrument
 
 from enum import Enum, auto
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 
 class AnalysisTypeNotSupportedError(Exception):
     pass
@@ -25,6 +26,12 @@ class AnalysisType(Enum):
     STATEMENT_TREND = auto()
     NEWS_SENTIMENT = auto()
     TECHNICAL = auto()
+
+@dataclass
+class AdvisorReport:
+    final_decision: dict = field(default_factory=dict)
+    sub_analysis_results: dict = field(default_factory=dict)
+    analysis_cost_usd: float = field(default=0)
 
 class InvestingAdvisor:
     def __init__(self, model_provider: ModelProvider):
@@ -41,19 +48,28 @@ class InvestingAdvisor:
 
     def analyze_instrument(self, instrument: Instrument) -> tuple[dict, dict]:
         analysis_result = {}
+        total_cost = 0
 
         def _run_analyst(analyst):
             decision: AnalystDecision = analyst.analyze(instrument)
-            return analyst.__class__.__name__, decision.model_dump(mode='json')
+            usage = analyst.last_usage_metadata
+            return analyst.__class__.__name__, decision.model_dump(mode='json'), usage
 
         with ThreadPoolExecutor(max_workers=len(self._analysts)) as executor:
             futures = [executor.submit(_run_analyst, analyst) for analyst in self._analysts.values()]
             for future in as_completed(futures):
-                analyst_name, result = future.result()
+                analyst_name, result, usage = future.result()
                 analysis_result[analyst_name] = result
 
+                total_cost += usage["total_cost_usd"]
+
         final_decision = self._general_analyst.analyze(analysis_result)
-        return final_decision.model_dump(mode='json'), analysis_result
+
+        return AdvisorReport(
+            final_decision=final_decision.model_dump(mode='json'),
+            sub_analysis_results=analysis_result,
+            analysis_cost_usd=total_cost
+        )
 
     def analyze_instrument_component(self, analysis_type: AnalysisType, instrument: Instrument) -> dict:
         analyst = self._analysts.get(analysis_type)

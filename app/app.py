@@ -507,8 +507,12 @@ elif page == "🔍 Instruments Catalog":
                     st.write("📜 Examining multi-year financial statement trajectories...")
                     st.write("🧠 Synthesizing sub-analyst reports into CIO executive recommendation...")
                     try:
-                        final_decision, sub_analyst_results = advisor.analyze_instrument(instrument)
-                        st.session_state[cache_key] = (final_decision, sub_analyst_results)
+                        advisor_report = advisor.analyze_instrument(instrument)
+                        st.session_state[cache_key] = (
+                            advisor_report.final_decision, 
+                            advisor_report.sub_analysis_results, 
+                            advisor_report.analysis_cost_usd
+                        )
                         status.update(label="Analysis complete!", state="complete", expanded=False)
                         st.rerun()
                     except Exception as e:
@@ -518,20 +522,14 @@ elif page == "🔍 Instruments Catalog":
         # Render Output
         cached_data = st.session_state.get(cache_key)
         if cached_data:
-            final_decision, sub_analyst_results = cached_data
+            final_decision, sub_analyst_results, cost = cached_data
             
             st.markdown("---")
             decision = str(final_decision.get("decision", "HOLD")).upper()
             reasoning_points = final_decision.get("reasoning", [])
 
-            if hasattr(advisor, '_model_provider'):
-                provider_name = advisor._model_provider.__class__.__name__
-            else:
-                provider_name = "LLM Synthesis Engine"
+            provider_name = advisor._model_provider.__class__.__name__
 
-            # ------------------------------------------
-            # 1. FINAL CIO RECOMMENDATION & METADATA
-            # ------------------------------------------
             with st.container(border=True):
                 col_dec, col_meta = st.columns([1, 2], gap="large")
                 
@@ -551,29 +549,18 @@ elif page == "🔍 Instruments Catalog":
                             </div>""", 
                             unsafe_allow_html=True
                         )
-                    else:
-                        st.markdown(
-                            """<div style="background-color: #38321b; border: 1px solid #6f622e; border-radius: 8px; padding: 12px; text-align: center;">
-                                <h2 style="color: #FFC107; margin: 0; padding: 0;">🟡 HOLD</h2>
-                            </div>""", 
-                            unsafe_allow_html=True
-                        )
 
                 with col_meta:
                     st.caption("EVALUATION METADATA")
                     st.markdown(
                         f"• Target Symbol: **`{selected_symbol}`**  \n"
-                        f"• Consensus Breakdown: **{len(sub_analyst_results)} Sub-Analyst Models**  \n"
-                        f"• Engine: **`{provider_name}`**"
+                        f"• Engine: **`{provider_name}`**  \n"
+                        f"• Analysis Cost: **`${cost}`**"
                     )
 
-            # ------------------------------------------
-            # 2. SUB-ANALYST BREAKDOWN GRID
-            # ------------------------------------------
             st.markdown("#### 👥 Sub-Analyst Recommendations")
             
             if sub_analyst_results:
-                # Format analyst class names into clean labels (e.g., FinancialHealthAnalyst -> Financial Health)
                 def clean_analyst_name(class_name: str) -> str:
                     return class_name.replace("Analyst", "").replace("Financial", "Fin.").strip()
 

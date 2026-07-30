@@ -24,6 +24,10 @@ class Analyst(ABC):
             )
         self._chain: BaseChainWrapper = chain_class(llm)
 
+    @property
+    def last_usage_metadata(self):
+        return self._chain.last_usage_metadata
+
 
 class ComponentAnalyst(Analyst):
 
