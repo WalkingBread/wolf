@@ -178,7 +178,17 @@ class Instrument:
         for key, attribute_name in statements_map.items():
             try:
                 statement_data = getattr(self._ticker, attribute_name)
-                result[key] = statement_data.to_dict() if not statement_data.empty else {}
+                if statement_data is not None and not statement_data.empty:
+                    df_copy = statement_data.copy()
+                    
+                    df_copy.columns = [
+                        col.strftime("%Y") if hasattr(col, "strftime") else str(col) 
+                        for col in df_copy.columns
+                    ]
+                    
+                    result[key] = df_copy.to_dict(orient="index")
+                else:
+                    result[key] = {}
             except Exception as e:
                 logger.warning(f'Failed to fetch {key} for instrument {self.symbol}: {str(e)}')
                 result[key] = {}
