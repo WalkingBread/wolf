@@ -473,9 +473,9 @@ elif page == "🔍 Instruments Catalog":
     with tab_advisor:
         st.markdown(f"### 🤖 AI Investment Analysis")
         st.caption(f"Multi-agent synthesis for **{basic_info.get('long_name', selected_symbol)}** (`{selected_symbol}`)")
-
+        
         cache_key = f"advisor_res_{selected_symbol}"
-        cached_result = st.session_state.get(cache_key)
+        cached_data = st.session_state.get(cache_key)  # Stores tuple: (final_decision_dict, sub_analysts_dict)
 
         with st.container(border=True):
             col_info, col_actions = st.columns([3, 1], gap="medium")
@@ -483,14 +483,14 @@ elif page == "🔍 Instruments Catalog":
             with col_info:
                 st.markdown("**How this works:**")
                 st.markdown(
-                    "This system runs parallel evaluation models (**Financial Health** & **Valuation Metrics**) "
-                    "and feeds their findings into a General Synthesis Analyst to produce an unbiased recommendation."
+                    "This system runs 5 parallel evaluation models (**Health, Valuation Metrics, Statement Trends, News Sentiment, Technical Momentum**) "
+                    "and feeds their findings into a General Synthesis Analyst (CIO) to produce a unified recommendation."
                 )
 
             with col_actions:
                 st.markdown(" ")
                 run_analysis = st.button("🚀 Run Analysis", type="primary", use_container_width=True)
-                if cached_result:
+                if cached_data:
                     if st.button("🔄 Clear Result", use_container_width=True):
                         del st.session_state[cache_key]
                         st.rerun()
@@ -507,30 +507,36 @@ elif page == "🔍 Instruments Catalog":
                     st.write("📜 Examining multi-year financial statement trajectories...")
                     st.write("🧠 Synthesizing sub-analyst reports into CIO executive recommendation...")
                     try:
-                        result = advisor.analyze_instrument(instrument)
-                        st.session_state[cache_key] = result
+                        final_decision, sub_analyst_results = advisor.analyze_instrument(instrument)
+                        st.session_state[cache_key] = (final_decision, sub_analyst_results)
                         status.update(label="Analysis complete!", state="complete", expanded=False)
                         st.rerun()
                     except Exception as e:
                         status.update(label="Analysis failed!", state="error", expanded=True)
                         st.error(f"Error executing advisor: {str(e)}")
 
-        cached_result = st.session_state.get(cache_key)
-        if cached_result:
+        # Render Output
+        cached_data = st.session_state.get(cache_key)
+        if cached_data:
+            final_decision, sub_analyst_results = cached_data
+            
             st.markdown("---")
-            decision = str(cached_result.get("decision", "HOLD")).upper()
-            reasoning_points = cached_result.get("reasoning", [])
+            decision = str(final_decision.get("decision", "HOLD")).upper()
+            reasoning_points = final_decision.get("reasoning", [])
 
             if hasattr(advisor, '_model_provider'):
                 provider_name = advisor._model_provider.__class__.__name__
             else:
                 provider_name = "LLM Synthesis Engine"
 
+            # ------------------------------------------
+            # 1. FINAL CIO RECOMMENDATION & METADATA
+            # ------------------------------------------
             with st.container(border=True):
                 col_dec, col_meta = st.columns([1, 2], gap="large")
                 
                 with col_dec:
-                    st.caption("SYNTHESIS DECISION")
+                    st.caption("SYNTHESIS DECISION (CIO)")
                     if decision == "BUY":
                         st.markdown(
                             """<div style="background-color: #1b382b; border: 1px solid #2e6f40; border-radius: 8px; padding: 12px; text-align: center;">
@@ -557,22 +563,63 @@ elif page == "🔍 Instruments Catalog":
                     st.caption("EVALUATION METADATA")
                     st.markdown(
                         f"• Target Symbol: **`{selected_symbol}`**  \n"
-                        f"• Key Findings: **{len(reasoning_points)} Points Identified**  \n"
+                        f"• Consensus Breakdown: **{len(sub_analyst_results)} Sub-Analyst Models**  \n"
                         f"• Engine: **`{provider_name}`**"
                     )
 
+            # ------------------------------------------
+            # 2. SUB-ANALYST BREAKDOWN GRID
+            # ------------------------------------------
+            st.markdown("#### 👥 Sub-Analyst Recommendations")
+            
+            if sub_analyst_results:
+                # Format analyst class names into clean labels (e.g., FinancialHealthAnalyst -> Financial Health)
+                def clean_analyst_name(class_name: str) -> str:
+                    return class_name.replace("Analyst", "").replace("Financial", "Fin.").strip()
 
-            st.markdown("### 💡 Decision Rationale")
+                cols = st.columns(len(sub_analyst_results))
+                
+                for idx, (analyst_name, report) in enumerate(sub_analyst_results.items()):
+                    sub_dec = str(report.get("decision", "HOLD")).upper()
+                    display_name = clean_analyst_name(analyst_name)
 
-            # Cleaned Bullet List Output (No Argument labels)
+                    with cols[idx]:
+                        with st.container(border=True):
+                            st.caption(display_name)
+                            if sub_dec == "BUY":
+                                st.markdown(
+                                    """<div style="background-color: #1b382b; border-radius: 6px; padding: 6px; text-align: center;">
+                                        <span style="color: #4CAF50; font-weight: bold;">🟢 BUY</span>
+                                    </div>""",
+                                    unsafe_allow_html=True
+                                )
+                            elif sub_dec == "SELL":
+                                st.markdown(
+                                    """<div style="background-color: #3b1c1c; border-radius: 6px; padding: 6px; text-align: center;">
+                                        <span style="color: #FF5252; font-weight: bold;">🔴 SELL</span>
+                                    </div>""",
+                                    unsafe_allow_html=True
+                                )
+                            else:
+                                st.markdown(
+                                    """<div style="background-color: #38321b; border-radius: 6px; padding: 6px; text-align: center;">
+                                        <span style="color: #FFC107; font-weight: bold;">🟡 HOLD</span>
+                                    </div>""",
+                                    unsafe_allow_html=True
+                                )
+
+            # ------------------------------------------
+            # 3. CIO ARGUMENTATION & REASONING LIST
+            # ------------------------------------------
+            st.markdown("### 💡 Core Synthesis Rationale")
+
             if reasoning_points:
                 with st.container(border=True):
                     for point in reasoning_points:
-                        # Fix formatting issue: Escape raw underscores or single asterisks from LLM outputs
+                        # Escape unescaped underscores to avoid breaking markdown formatting
                         safe_point = point.replace("_", r"\_")
-                        
                         st.markdown(f"• {safe_point}")
-                        st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
+                        st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True)
             else:
                 st.info("No detailed reasoning delivered by the model.")
 

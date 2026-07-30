@@ -39,7 +39,7 @@ class InvestingAdvisor:
         }
         self._general_analyst = GeneralAnalyst(self._model_provider.llm)
 
-    def analyze_instrument(self, instrument: Instrument) -> dict:
+    def analyze_instrument(self, instrument: Instrument) -> tuple[dict, dict]:
         analysis_result = {}
 
         def _run_analyst(analyst):
@@ -53,7 +53,7 @@ class InvestingAdvisor:
                 analysis_result[analyst_name] = result
 
         final_decision = self._general_analyst.analyze(analysis_result)
-        return final_decision.model_dump(mode='json')
+        return final_decision.model_dump(mode='json'), analysis_result
 
     def analyze_instrument_component(self, analysis_type: AnalysisType, instrument: Instrument) -> dict:
         analyst = self._analysts.get(analysis_type)
