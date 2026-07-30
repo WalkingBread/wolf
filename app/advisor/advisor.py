@@ -11,6 +11,7 @@ from app.advisor.analyst.autonomous import (
 from app.data.instrument.instrument import Instrument
 
 from enum import Enum, auto
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class AnalysisTypeNotSupportedError(Exception):
     pass
@@ -40,9 +41,16 @@ class InvestingAdvisor:
 
     def analyze_instrument(self, instrument: Instrument) -> dict:
         analysis_result = {}
-        for analyst in self._analysts.values():
-            component_analysis_result: AnalystDecision = analyst.analyze(instrument)
-            analysis_result[analyst.__class__.__name__] = component_analysis_result.model_dump(mode='json')
+
+        def _run_analyst(analyst):
+            decision: AnalystDecision = analyst.analyze(instrument)
+            return analyst.__class__.__name__, decision.model_dump(mode='json')
+
+        with ThreadPoolExecutor(max_workers=len(self._analysts)) as executor:
+            futures = [executor.submit(_run_analyst, analyst) for analyst in self._analysts.values()]
+            for future in as_completed(futures):
+                analyst_name, result = future.result()
+                analysis_result[analyst_name] = result
 
         final_decision = self._general_analyst.analyze(analysis_result)
         return final_decision.model_dump(mode='json')
