@@ -9,8 +9,8 @@ from app.advisor.analyst.autonomous import (
     GeneralAnalyst,
     SimpleWordTranslator
 )
-from app.data.instrument.instrument import Instrument
-from app.tools.time import measure_exec_time
+from core.data.instrument.instrument import Instrument
+from core.tools.time import measure_exec_time
 
 from enum import Enum, auto
 from concurrent.futures import ThreadPoolExecutor, as_completed

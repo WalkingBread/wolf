@@ -16,11 +16,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 from app.persistence.repository import PortfolioRepository
-from app.data.instrument.provider import InstrumentProvider
-from app.data.currency.converter import CurrencyConverter
 from app.portfolio.asset import Portfolio, Asset
 from app.advisor.advisor import InvestingAdvisor
 from app.advisor.genai import AzureModelProvider
+
+from core.data.instrument.provider import InstrumentProvider
+from core.data.currency.converter import CurrencyConverter
 
 SUPPORTED_CURRENCIES = ["USD", "EUR", "PLN"]
 

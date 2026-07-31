@@ -3,7 +3,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_community.callbacks import get_openai_callback
 
-from app.logger.config import get_logger
+from core.tools.logger import get_logger
 
 logger = get_logger(logger_name='LangChain', stdout=False)
 

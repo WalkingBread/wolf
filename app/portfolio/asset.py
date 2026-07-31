@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from app.data.instrument.instrument import Instrument
-from app.data.currency.converter import CurrencyConverter
+from core.data.instrument.instrument import Instrument
+from core.data.currency.converter import CurrencyConverter
 
 class Asset:
     def __init__(self, instrument: Instrument, volume: float, 

@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.data.instrument.instrument import Instrument
+
+from core.data.instrument.instrument import Instrument
 
 from app.persistence.models import Base, PortfolioModel, AssetModel
 from app.portfolio.asset import Portfolio, Asset  

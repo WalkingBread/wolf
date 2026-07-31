@@ -1,5 +1,5 @@
-from app.data.instrument.instrument import Instrument
-from app.data.instrument.symbols import INSTRUMENT_SYMBOLS
+from core.data.instrument.instrument import Instrument
+from core.data.instrument.symbols import INSTRUMENT_SYMBOLS
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 

@@ -1,7 +1,7 @@
 from yfinance import Ticker
 from newspaper import Article
 
-from app.logger.config import get_logger
+from core.tools.logger import get_logger
 
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed

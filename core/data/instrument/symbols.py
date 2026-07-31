@@ -1,4 +1,3 @@
-
 INSTRUMENT_SYMBOLS = [
     # ==========================================
     # WARSAW STOCK EXCHANGE (GPW)
