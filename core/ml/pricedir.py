@@ -2,27 +2,25 @@ import pandas as pd
 import numpy as np
 import ta
 
+from abc import ABC, abstractmethod
+
 from core.data.instrument.instrument import Instrument
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
-N_ESTIMATORS = 200
-MAX_DEPTH = 5
-
-class PriceDirectionPredictor:
-    def __init__(self, instrument: Instrument, horizon = 5):
+class PriceDirPredictor(ABC):
+    def __init__(self, instrument: Instrument, horizon_days = 5):
         self._instrument = instrument
-        self.horizon = 5
+        self.horizon = horizon_days
 
-        self._model = RandomForestClassifier(
-            n_estimators=N_ESTIMATORS, 
-            max_depth=MAX_DEPTH,          
-            random_state=42, 
-            class_weight="balanced"
-        )
+        self._model = self._init_model()
 
-    def fetch_data(self) -> pd.DataFrame:
+    @abstractmethod
+    def _init_model(self):
+        pass
+
+    def _fetch_data(self) -> pd.DataFrame:
         df = self._instrument.get_all_historical_market_data()
 
         if df is None or df.empty:
@@ -33,7 +31,7 @@ class PriceDirectionPredictor:
             
         return df.copy()
     
-    def create_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _create_features(self, df: pd.DataFrame) -> pd.DataFrame:
         data = df.copy()
 
         close_col = 'Close' 
@@ -43,6 +41,7 @@ class PriceDirectionPredictor:
 
         data['Return_1D'] = data[close_col].pct_change(1)
         data['Return_5D'] = data[close_col].pct_change(5)
+        data['Return_10D'] = data[close_col].pct_change(10)
 
         data['SMA_10'] = ta.trend.sma_indicator(data[close_col], window=10)
         data['SMA_50'] = ta.trend.sma_indicator(data[close_col], window=50)
@@ -63,9 +62,24 @@ class PriceDirectionPredictor:
 
         return data.dropna()
     
+N_ESTIMATORS = 200
+MAX_DEPTH = 5
+
+class PriceDirPredictorRF(PriceDirPredictor):
+    def __init__(self, instrument: Instrument, horizon_days = 5):
+        super().__init__(instrument, horizon_days)
+
+    def _init_model(self):
+        return RandomForestClassifier(
+            n_estimators=N_ESTIMATORS, 
+            max_depth=MAX_DEPTH,          
+            random_state=42, 
+            class_weight="balanced"
+        )
+    
     def train_and_evaluate(self, train_ratio: float = 0.8) -> dict:
-        raw_df = self.fetch_data()
-        processed_df = self.create_features(raw_df)
+        raw_df = self._fetch_data()
+        processed_df = self._create_features(raw_df)
 
         base_features = [
             'Return_1D', 'Return_5D', 'Return_10D', 'SMA_Ratio', 
