@@ -6,7 +6,8 @@ from app.advisor.analyst.autonomous import (
     StatementTrendAnalyst,
     NewsSentimentAnalyst,
     TechnicalAnalyst,
-    GeneralAnalyst
+    GeneralAnalyst,
+    SimpleWordTranslator
 )
 from app.data.instrument.instrument import Instrument
 from app.tools.time import measure_exec_time
@@ -46,6 +47,7 @@ class InvestingAdvisor:
             AnalysisType.NEWS_SENTIMENT: NewsSentimentAnalyst(self._model_provider.llm)
         }
         self._general_analyst = GeneralAnalyst(self._model_provider.llm)
+        self._simple_word_translator = SimpleWordTranslator(self._model_provider.llm)
 
 
     @measure_exec_time
@@ -73,7 +75,12 @@ class InvestingAdvisor:
             sub_analysis_results=analysis_result,
             analysis_cost_usd=total_cost
         )
+    
+    @measure_exec_time
+    def translate_decision_to_simple_words(self, final_decision: dict) -> str:
+        return self._simple_word_translator.analyze(final_decision)
 
+    @measure_exec_time
     def analyze_instrument_component(self, analysis_type: AnalysisType, instrument: Instrument) -> dict:
         analyst = self._analysts.get(analysis_type)
         if not analyst:

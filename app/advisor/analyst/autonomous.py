@@ -146,3 +146,8 @@ class GeneralAnalyst(Analyst):
         return self._chain.invoke({
             "analyst_report": aggregated_reports
         })
+    
+class SimpleWordTranslator(Analyst):
+
+    def analyze(self, final_decision: dict) -> str:
+        return self._chain.invoke(final_decision)

@@ -1,5 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
+from langchain_core.output_parsers import StrOutputParser
 
 from app.advisor.analyst.chain.base import BaseChainWrapper
 from app.advisor.analyst.model import AnalystDecision
@@ -153,3 +154,31 @@ class GeneralAnalystChain(BaseChainWrapper):
         ])
 
         return prompt | self.llm.with_structured_output(AnalystDecision)
+    
+class SimpleWordTranslatorChain(BaseChainWrapper):
+
+    def _compile_chain(self) -> Runnable:
+        system_template = (
+            "You are a friendly, clear financial educator.\n"
+            "Your job is to translate complex investment decisions into plain, simple language "
+            "that anyone without a finance background can easily understand.\n\n"
+            "Guidelines:\n"
+            "- Explain the final decision (BUY, SELL) and WHY in everyday terms.\n"
+            "- Avoid financial jargon (e.g., replace 'high valuation metrics' with 'the stock is expensive', "
+            "or 'bearish moving average' with 'the price has been dropping recently').\n"
+            "- Keep the tone objective, direct, and easy to read."
+        )
+        
+        human_template = (
+            "Here is the Chief Investment Officer's final decision and key points:\n\n"
+            "Final Decision: {decision}\n"
+            "Key Points / Analysis: {reasoning}\n\n"
+            "Translate this decision into a simple, easy-to-understand explanation:"
+        )
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_template),
+            ("human", human_template)
+        ])
+
+        return prompt | self.llm | StrOutputParser()

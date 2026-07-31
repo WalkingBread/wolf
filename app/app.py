@@ -1,6 +1,6 @@
-#################################
-#        AI-generated UI        #
-#################################
+#######################################
+#           AI-generated UI           #
+#######################################
 
 import sys
 from pathlib import Path
@@ -577,36 +577,94 @@ elif page == "🔍 Instruments Catalog":
                             st.caption(display_name)
                             if sub_dec == "BUY":
                                 st.markdown(
-                                    """<div style="background-color: #1b382b; border-radius: 6px; padding: 6px; text-align: center;">
+                                    """<div style="background-color: #1b382b; border-radius: 6px; padding: 6px; text-align: center; margin-bottom: 8px;">
                                         <span style="color: #4CAF50; font-weight: bold;">🟢 BUY</span>
                                     </div>""",
                                     unsafe_allow_html=True
                                 )
                             elif sub_dec == "SELL":
                                 st.markdown(
-                                    """<div style="background-color: #3b1c1c; border-radius: 6px; padding: 6px; text-align: center;">
+                                    """<div style="background-color: #3b1c1c; border-radius: 6px; padding: 6px; text-align: center; margin-bottom: 8px;">
                                         <span style="color: #FF5252; font-weight: bold;">🔴 SELL</span>
                                     </div>""",
                                     unsafe_allow_html=True
                                 )
-                            else:
-                                st.markdown(
-                                    """<div style="background-color: #38321b; border-radius: 6px; padding: 6px; text-align: center;">
-                                        <span style="color: #FFC107; font-weight: bold;">🟡 HOLD</span>
-                                    </div>""",
-                                    unsafe_allow_html=True
-                                )
+            with st.container(border=True):
+                st.markdown("### 💡 Core Synthesis Rationale")
 
-            st.markdown("### 💡 Core Synthesis Rationale")
+                if reasoning_points:
+                    formatted_points = "".join([
+                        f"<li style='margin-bottom: 8px;'>{point.replace('_', r'\_')}</li>" 
+                        for point in reasoning_points
+                    ])
+                    
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background-color: rgba(255, 255, 255, 0.03);
+                            border-left: 4px solid #10B981;
+                            padding: 16px 20px 8px 20px;
+                            border-radius: 6px;
+                            margin-bottom: 20px;
+                            font-size: 0.98rem;
+                            line-height: 1.6;
+                        ">
+                            <ul style="margin: 0; padding-left: 18px;">
+                                {formatted_points}
+                            </ul>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.info("No detailed reasoning delivered by the model.")
 
-            if reasoning_points:
+            simple_cache_key = f"advisor_simple_{selected_symbol}"
+            simple_explanation = st.session_state.get(simple_cache_key)
+
+            st.markdown("<div style='margin-top: 16px;'></div>", unsafe_allow_html=True)
+            
+            _, col_mid, _ = st.columns([1, 2, 1])
+            with col_mid:
+                explain_pressed = st.button(
+                    "✨ Explain in Simple Words", 
+                    use_container_width=True, 
+                    help="Translates complex CIO financial terminology into everyday language"
+                )
+
+            if explain_pressed:
+                if not advisor:
+                    st.error("⚠️ AI Advisor service is not initialized.")
+                else:
+                    with st.spinner("🧠 Translating institutional jargon into plain English..."):
+                        try:
+                            translation = advisor.translate_decision_to_simple_words(final_decision)
+                            st.session_state[simple_cache_key] = translation
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to translate decision: {str(e)}")
+
+            if simple_explanation:
+                st.markdown("<div style='margin-top: 12px;'></div>", unsafe_allow_html=True)
+                
                 with st.container(border=True):
-                    for point in reasoning_points:
-                        safe_point = point.replace("_", r"\_")
-                        st.markdown(f"• {safe_point}")
-                        st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True)
-            else:
-                st.info("No detailed reasoning delivered by the model.")
+                    st.markdown("#### 🎈 Plain English Summary")
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background-color: rgba(255, 255, 255, 0.03);
+                            border-left: 4px solid #3B82F6;
+                            padding: 14px 18px;
+                            border-radius: 4px;
+                            margin-top: 8px;
+                            font-size: 1.05rem;
+                            line-height: 1.6;
+                        ">
+                            {simple_explanation}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
     with tab_fundamentals:
         col_val, col_health = st.columns(2, gap="large")
