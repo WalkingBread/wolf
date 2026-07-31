@@ -1,6 +1,8 @@
 from app.data.instrument.instrument import Instrument
 from app.data.instrument.symbols import INSTRUMENT_SYMBOLS
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 class InstrumentProvider:
     def __init__(self, instrument_symbols = INSTRUMENT_SYMBOLS):
         self._instruments = self._init_instruments(instrument_symbols)
@@ -29,3 +31,6 @@ class InstrumentProvider:
             names_to_symbols[name] = symbol
         return names_to_symbols
     
+    def eager_load_instruments(self, max_workers=10):
+        with ThreadPoolExecutor(max_workers=max_workers) as loader:
+            list(loader.map(lambda inst: inst.refresh_data(), self._instruments.values()))

@@ -52,7 +52,9 @@ def get_repository():
 
 @st.cache_resource
 def get_instrument_provider():
-    return InstrumentProvider()
+    instrument_provider = InstrumentProvider()
+    instrument_provider.eager_load_instruments()
+    return instrument_provider
 
 @st.cache_resource
 def get_investing_advisor():
@@ -377,7 +379,6 @@ elif page == "🔍 Instruments Catalog":
 
     st.markdown("---")
 
-    # Top KPI Bar
     c1, c2, c3, c4, c5 = st.columns(5)
     
     curr_price = market_data.get("current_price") or 0.0
@@ -475,7 +476,7 @@ elif page == "🔍 Instruments Catalog":
         st.caption(f"Multi-agent synthesis for **{basic_info.get('long_name', selected_symbol)}** (`{selected_symbol}`)")
         
         cache_key = f"advisor_res_{selected_symbol}"
-        cached_data = st.session_state.get(cache_key)  # Stores tuple: (final_decision_dict, sub_analysts_dict)
+        cached_data = st.session_state.get(cache_key) 
 
         with st.container(border=True):
             col_info, col_actions = st.columns([3, 1], gap="medium")
@@ -511,7 +512,8 @@ elif page == "🔍 Instruments Catalog":
                         st.session_state[cache_key] = (
                             advisor_report.final_decision, 
                             advisor_report.sub_analysis_results, 
-                            advisor_report.analysis_cost_usd
+                            advisor_report.analysis_cost_usd,
+                            advisor.analyze_instrument.execution_time
                         )
                         status.update(label="Analysis complete!", state="complete", expanded=False)
                         st.rerun()
@@ -519,10 +521,9 @@ elif page == "🔍 Instruments Catalog":
                         status.update(label="Analysis failed!", state="error", expanded=True)
                         st.error(f"Error executing advisor: {str(e)}")
 
-        # Render Output
         cached_data = st.session_state.get(cache_key)
         if cached_data:
-            final_decision, sub_analyst_results, cost = cached_data
+            final_decision, sub_analyst_results, cost, exec_time = cached_data
             
             st.markdown("---")
             decision = str(final_decision.get("decision", "HOLD")).upper()
@@ -555,7 +556,8 @@ elif page == "🔍 Instruments Catalog":
                     st.markdown(
                         f"• Target Symbol: **`{selected_symbol}`**  \n"
                         f"• Engine: **`{provider_name}`**  \n"
-                        f"• Analysis Cost: **`${cost}`**"
+                        f"• Analysis Cost: **`${cost:.4f}`**  \n"
+                        f"• Execution Time: **`{exec_time:.4f} s`**"
                     )
 
             st.markdown("#### 👥 Sub-Analyst Recommendations")
@@ -595,15 +597,11 @@ elif page == "🔍 Instruments Catalog":
                                     unsafe_allow_html=True
                                 )
 
-            # ------------------------------------------
-            # 3. CIO ARGUMENTATION & REASONING LIST
-            # ------------------------------------------
             st.markdown("### 💡 Core Synthesis Rationale")
 
             if reasoning_points:
                 with st.container(border=True):
                     for point in reasoning_points:
-                        # Escape unescaped underscores to avoid breaking markdown formatting
                         safe_point = point.replace("_", r"\_")
                         st.markdown(f"• {safe_point}")
                         st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True)

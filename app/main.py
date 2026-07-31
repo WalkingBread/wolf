@@ -6,6 +6,15 @@ from app.advisor.genai import AzureModelProvider
 from app.persistence.repository import PortfolioRepository
 from datetime import datetime
 
+from time import time
+
+t1 = time()
+instrument = Instrument('MSFT')
+instrument.info
+t2 = time()
+
+print(t2 - t1)
+
 provider = InstrumentProvider()
 instrument: Instrument = provider.get_instrument('MSFT')
 
@@ -17,7 +26,5 @@ p = Portfolio('p1', 'PLN')
 
 asset = Asset(instrument, 10, 406.74, datetime(2025, 10, 11))
 p.add(asset)
-
-PortfolioRepository().save(p)
 
 #print(p)

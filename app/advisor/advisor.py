@@ -9,6 +9,7 @@ from app.advisor.analyst.autonomous import (
     GeneralAnalyst
 )
 from app.data.instrument.instrument import Instrument
+from app.tools.time import measure_exec_time
 
 from enum import Enum, auto
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -46,6 +47,8 @@ class InvestingAdvisor:
         }
         self._general_analyst = GeneralAnalyst(self._model_provider.llm)
 
+
+    @measure_exec_time
     def analyze_instrument(self, instrument: Instrument) -> tuple[dict, dict]:
         analysis_result = {}
         total_cost = 0
