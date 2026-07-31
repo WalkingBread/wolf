@@ -116,11 +116,20 @@ class Instrument:
             "market_cap": info.get("marketCap")
         }
     
-    def get_historical_market_data(self, start: datetime, end: datetime, interval = '1d'): 
+    def get_historical_market_data(self, start: datetime, end: datetime, interval: str = '1d'): 
         try:
             return self._ticker.history(
                 start=start.strftime("%Y-%m-%d"), 
                 end=end.strftime("%Y-%m-%d"), 
+                interval=interval
+            )
+        except Exception as e:
+            raise InstrumentDataFetchError(f'Error while fetching instrument data: {str(e)}')
+        
+    def get_all_historical_market_data(self, interval: str = '1d'):
+        try:
+            return self._ticker.history(
+                period='max',
                 interval=interval
             )
         except Exception as e:
