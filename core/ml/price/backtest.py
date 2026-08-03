@@ -1,11 +1,11 @@
 from core.portfolio.asset import Asset, Portfolio
 from core.data.instrument.instrument import Instrument
+from core.ml.price.dto import StrategyResult, EngineState
+from core.ml.price.strategy import ModelStrategy
 
 from datetime import datetime, timedelta
-
-from typing import Callable
-
 from dataclasses import dataclass
+from typing import Optional
 
 import pandas as pd
 
@@ -19,10 +19,11 @@ class Transaction:
     fee: float
 
 class BacktestEngine:
-    def __init__(self, portfolio: Portfolio, start_date: datetime,
-                 initial_cash: float = 1000.0):
+    def __init__(self, portfolio: Portfolio, start_date: datetime, 
+                 strategy: ModelStrategy, initial_cash: float = 1000.0):
         self._portfolio = portfolio
         self._start_date = start_date
+        self._strategy = strategy
         self._initial_cash = initial_cash
         self._cash = initial_cash
 
@@ -41,9 +42,15 @@ class BacktestEngine:
     def total_value(self):
         return self.assets_values + self.cash
     
-    def next_day(self, strategy: Callable = None):
-        if strategy:
-            strategy()
+    def next_day(self):
+        engine_state = EngineState(self.date, self._portfolio, self._cash)
+
+        result: Optional[StrategyResult] = self._strategy.apply(engine_state)
+        if result is not None:
+            if result.type == 'BUY':
+                self.buy(self._strategy.instrument, result.amount)
+            elif result.type == 'SELL':
+                self.sell(self._strategy.instrument.symbol, result.amount)
 
         if self.date < datetime.now():
             self.date += timedelta(days=1)
@@ -57,7 +64,7 @@ class BacktestEngine:
             raise ValueError(f'Insufficient cash to acquire the instrument for amount {amount}.')
 
         market_data = instrument.get_market_data_at_closest_trading_day(self.date)
-        price = market_data['close']
+        price = self._portfolio.convert_to_native_currency(market_data['close'], instrument.currency)
 
         volume = (amount - fee) / price
 
@@ -73,11 +80,13 @@ class BacktestEngine:
 
     def sell(self, symbol: str, amount: float, fee: float = 0.0):
         asset: Asset = self._portfolio.get_asset(symbol)
+
         if not asset:
             raise ValueError(f"Cannot sell {symbol}: position does not exist in portfolio.")
 
+
         market_data = asset.instrument.get_market_data_at_closest_trading_day(self.date)
-        price = market_data['close']
+        price = self._portfolio.convert_to_native_currency(market_data['close'], asset.currency)
 
         volume_to_sell = amount / price
         if volume_to_sell > asset.volume:

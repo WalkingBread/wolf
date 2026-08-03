@@ -135,6 +135,9 @@ class Portfolio:
     
     def get_asset(self, symbol: str):
         return self._assets.get(symbol)
+
+    def contains(self, symbol: str):
+        return symbol in self._assets
     
     def get_assets_data(self) -> dict:
         assets_data = []
@@ -159,6 +162,9 @@ class Portfolio:
             })
 
         return assets_data
+
+    def convert_to_native_currency(self, amount: float, foreign_currency: str) -> float:
+        return self._converter.convert(amount, foreign_currency)
     
     def __str__(self) -> str:
         today = datetime.now()

@@ -23,6 +23,10 @@ class PriceDirPredictor(ABC):
         self.horizon = horizon_days
         self._model = self._init_model()
 
+    @property
+    def instrument(self):
+        return self._instrument
+
     @abstractmethod
     def _init_model(self):
         pass
@@ -169,16 +173,16 @@ class PriceDirPredictorLGBM(PriceDirPredictor):
     def _init_model(self):
         return lightgbm.LGBMClassifier(
             n_estimators=150,
-            max_depth=4,             # Keep shallow to prevent overfitting financial noise
-            num_leaves=15,           # Default is 31; lowering reduces variance
-            learning_rate=0.03,      # Slow learning rate with high tree count
-            subsample=0.8,           # Row subsampling (bagging)
-            colsample_bytree=0.8,    # Feature subsampling
-            reg_alpha=0.1,           # L1 Regularization
-            reg_lambda=1.0,          # L2 Regularization
+            max_depth=4,  
+            num_leaves=15, 
+            learning_rate=0.03,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
             random_state=42,
             class_weight='balanced',
-            verbose=-1               # Suppress warning logs during walk-forward retrains
+            verbose=-1
         )
 
     @property
@@ -195,6 +199,7 @@ class PriceDirPredictorLGBM(PriceDirPredictor):
             'Volume_Price_Force',
             'Daily_Range_Normalized',
         ]
+
     
 class PriceDirPredictorXGB(PriceDirPredictor):
     def _init_model(self):
