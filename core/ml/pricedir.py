@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import ta
+import lightgbm
+import xgboost as xgb
 
 from abc import ABC, abstractmethod
 
@@ -8,8 +10,12 @@ from core.data.instrument.instrument import Instrument
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
+from sklearn.ensemble import VotingClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class PriceDirPredictor(ABC):
     def __init__(self, instrument: Instrument, horizon_days = 5):
@@ -30,7 +36,7 @@ class PriceDirPredictor(ABC):
         df = self._instrument.market_data_history
 
         if df is None or df.empty:
-            raise ValueError(f"No price history found for symbol: {self.ticker}")
+            raise ValueError(f"No price history found for symbol: {self._instrument.symbol}")
 
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
@@ -69,7 +75,6 @@ class PriceDirPredictor(ABC):
         return data
 
     def _prepare_training_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Prepares feature matrix AND target labels, purging incomplete forward windows."""
         data = self._compute_raw_features(df)
 
         future_close = data['Close'].shift(-self.horizon)
@@ -81,6 +86,10 @@ class PriceDirPredictor(ABC):
     def train(self, end_date: datetime = None) -> dict:
         raw_df = self._fetch_data(end_date=end_date)
         processed_df = self._prepare_training_features(raw_df)
+
+        if end_date is not None:
+            valid_cutoff = end_date - timedelta(days=self.horizon)
+            processed_df = processed_df.loc[:valid_cutoff]
 
         X = processed_df[self.features]
         y = processed_df['Target']
@@ -141,6 +150,110 @@ class PriceDirPredictorRF(PriceDirPredictor):
 
     @property
     def features(self):
+        return [
+            'Return_1D',
+            'Return_5D',
+            'Return_10D',
+            'SMA_Ratio',
+            'RSI_14',
+            'MACD',
+            'ATR_14',
+            'Volume_Change',
+            'Volume_Price_Force',
+            'Daily_Range_Normalized',
+        ]
+    
+
+class PriceDirPredictorLGBM(PriceDirPredictor):
+
+    def _init_model(self):
+        return lightgbm.LGBMClassifier(
+            n_estimators=150,
+            max_depth=4,             # Keep shallow to prevent overfitting financial noise
+            num_leaves=15,           # Default is 31; lowering reduces variance
+            learning_rate=0.03,      # Slow learning rate with high tree count
+            subsample=0.8,           # Row subsampling (bagging)
+            colsample_bytree=0.8,    # Feature subsampling
+            reg_alpha=0.1,           # L1 Regularization
+            reg_lambda=1.0,          # L2 Regularization
+            random_state=42,
+            class_weight='balanced',
+            verbose=-1               # Suppress warning logs during walk-forward retrains
+        )
+
+    @property
+    def features(self) -> list:
+        return [
+            'Return_1D',
+            'Return_5D',
+            'Return_10D',
+            'SMA_Ratio',
+            'RSI_14',
+            'MACD',
+            'ATR_14',
+            'Volume_Change',
+            'Volume_Price_Force',
+            'Daily_Range_Normalized',
+        ]
+    
+class PriceDirPredictorXGB(PriceDirPredictor):
+    def _init_model(self):
+        return xgb.XGBClassifier(
+            n_estimators=150,
+            max_depth=3,
+            learning_rate=0.03,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
+            random_state=42,
+            eval_metric='logloss'
+        )
+
+    @property
+    def features(self) -> list:
+        return [
+            'Return_1D',
+            'Return_5D',
+            'Return_10D',
+            'SMA_Ratio',
+            'RSI_14',
+            'MACD',
+            'ATR_14',
+            'Volume_Change',
+            'Volume_Price_Force',
+            'Daily_Range_Normalized',
+        ]
+    
+
+class PriceDirPredictorEnsemble(PriceDirPredictor):
+
+    def _init_model(self):
+        rf = RandomForestClassifier(
+            n_estimators=150, max_depth=4, random_state=42, class_weight="balanced"
+        )
+        
+        lgbm = lightgbm.LGBMClassifier(
+            n_estimators=100, max_depth=3, learning_rate=0.03, 
+            random_state=42, verbose=-1, class_weight='balanced'
+        )
+        
+        lr = make_pipeline(
+            StandardScaler(), 
+            LogisticRegression(C=0.1, class_weight='balanced', random_state=42)
+        )
+
+        return VotingClassifier(
+            estimators=[
+                ('rf', rf),
+                ('lgbm', lgbm),
+                ('lr', lr)
+            ],
+            voting='soft'
+        )
+
+    @property
+    def features(self) -> list:
         return [
             'Return_1D',
             'Return_5D',
