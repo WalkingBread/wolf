@@ -16,7 +16,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 from app.persistence.repository import PortfolioRepository
-from app.portfolio.asset import Portfolio, Asset
+from core.portfolio.asset import Portfolio, Asset
 from app.advisor.advisor import InvestingAdvisor
 from app.advisor.genai import AzureModelProvider
 
@@ -95,7 +95,7 @@ def calculate_historical_portfolio_performance(portfolio, provider, default_days
     asset_histories = {}
     for asset in portfolio.assets:
         try:
-            hist_df = asset._instrument.get_historical_market_data(start=start_date, end=end_date)
+            hist_df = asset._instrument.get_market_data_from_period(start=start_date, end=end_date)
             if not hist_df.empty and 'Close' in hist_df.columns:
                 hist_df.index = pd.to_datetime(hist_df.index).date
                 
@@ -425,7 +425,7 @@ elif page == "🔍 Instruments Catalog":
 
     with tab_chart:
         try:
-            hist_df = instrument.get_historical_market_data(start=start_date, end=end_date)
+            hist_df = instrument.fetch_market_data_from_period(start=start_date, end=end_date)
             if not hist_df.empty:
                 c_type, _ = st.columns([1, 3])
                 with c_type:

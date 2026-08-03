@@ -2,9 +2,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from core.data.instrument.instrument import Instrument
+from core.portfolio.asset import Portfolio, Asset  
+
 
 from app.persistence.models import Base, PortfolioModel, AssetModel
-from app.portfolio.asset import Portfolio, Asset  
 
 class PortfolioRepository:
     def __init__(self, db_path: str = "sqlite:///./portfolios.db"):

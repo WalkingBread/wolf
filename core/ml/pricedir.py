@@ -9,29 +9,38 @@ from core.data.instrument.instrument import Instrument
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
+from datetime import datetime
+
 class PriceDirPredictor(ABC):
     def __init__(self, instrument: Instrument, horizon_days = 5):
         self._instrument = instrument
         self.horizon = horizon_days
-
         self._model = self._init_model()
 
     @abstractmethod
     def _init_model(self):
         pass
 
-    def _fetch_data(self) -> pd.DataFrame:
-        df = self._instrument.get_all_historical_market_data()
+    @property
+    @abstractmethod
+    def features(self) -> list:
+        pass
+
+    def _fetch_data(self, end_date: datetime = None) -> pd.DataFrame:
+        df = self._instrument.market_data_history
 
         if df is None or df.empty:
             raise ValueError(f"No price history found for symbol: {self.ticker}")
 
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
+
+        if end_date is not None:
+            df = df.loc[:end_date]
             
         return df.copy()
     
-    def _create_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _compute_raw_features(self, df: pd.DataFrame) -> pd.DataFrame:
         data = df.copy()
 
         close_col = 'Close' 
@@ -55,19 +64,72 @@ class PriceDirPredictor(ABC):
         data['Volume_Price_Force'] = data['Volume_Change'] * data['Return_1D']
         data['Daily_Range_Normalized'] = (data[high_col] - data[low_col]) / data['ATR_14']
 
-        future_close = data[close_col].shift(-self.horizon)
-        data['Target'] = (future_close > data[close_col]).astype(int)
-
         data = data.replace([np.inf, -np.inf], np.nan)
 
+        return data
+
+    def _prepare_training_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Prepares feature matrix AND target labels, purging incomplete forward windows."""
+        data = self._compute_raw_features(df)
+
+        future_close = data['Close'].shift(-self.horizon)
+        data['Target'] = (future_close > data['Close']).astype(int)
+
         return data.dropna()
+    
+    
+    def train(self, end_date: datetime = None) -> dict:
+        raw_df = self._fetch_data(end_date=end_date)
+        processed_df = self._prepare_training_features(raw_df)
+
+        X = processed_df[self.features]
+        y = processed_df['Target']
+
+        self._model.fit(X, y)
+
+        y_pred = self._model.predict(X)
+        acc = accuracy_score(y, y_pred)
+
+        return {
+            'symbol': self._instrument.symbol,
+            'train_end_date': end_date,
+            'train_samples': len(X),
+            'train_accuracy': acc
+        }
+
+    def predict_at_date(self, as_of_date: datetime) -> dict:
+        raw_df = self._fetch_data(end_date=as_of_date)
+        features_df = self._compute_raw_features(raw_df).dropna()
+
+        if features_df.empty:
+            return {
+                'date': as_of_date,
+                'signal': 0,
+                'confidence_up': 0.5,
+                'confidence_down': 0.5,
+                'atr': 0.0,
+                'close': 0.0
+            }
+
+        latest_row = features_df.iloc[-1]
+        latest_X = features_df[self.features].iloc[[-1]]
+        
+        pred = self._model.predict(latest_X)[0]
+        prob = self._model.predict_proba(latest_X)[0]
+
+        return {
+            'date': as_of_date,
+            'signal': int(pred),
+            'confidence_up': float(prob[1]),
+            'confidence_down': float(prob[0]),
+            'atr': float(latest_row['ATR_14']),
+            'close': float(latest_row['Close'])
+        }
     
 N_ESTIMATORS = 200
 MAX_DEPTH = 5
 
 class PriceDirPredictorRF(PriceDirPredictor):
-    def __init__(self, instrument: Instrument, horizon_days = 5):
-        super().__init__(instrument, horizon_days)
 
     def _init_model(self):
         return RandomForestClassifier(
@@ -76,38 +138,18 @@ class PriceDirPredictorRF(PriceDirPredictor):
             random_state=42, 
             class_weight="balanced"
         )
-    
-    def train_and_evaluate(self, train_ratio: float = 0.8) -> dict:
-        raw_df = self._fetch_data()
-        processed_df = self._create_features(raw_df)
 
-        base_features = [
-            'Return_1D', 'Return_5D', 'Return_10D', 'SMA_Ratio', 
-            'RSI_14', 'MACD', 'ATR_14', 'Volume_Change',
-            'Volume_Price_Force', 'Daily_Range_Normalized'
+    @property
+    def features(self):
+        return [
+            'Return_1D',
+            'Return_5D',
+            'Return_10D',
+            'SMA_Ratio',
+            'RSI_14',
+            'MACD',
+            'ATR_14',
+            'Volume_Change',
+            'Volume_Price_Force',
+            'Daily_Range_Normalized',
         ]
-
-        X = processed_df[base_features]
-        y = processed_df['Target']
-
-        split_idx = int(len(X) * train_ratio)
-        X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-        y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
-
-        self._model.fit(X_train, y_train)
-
-        test_preds = self._model.predict(X_test)
-        acc = accuracy_score(y_test, test_preds)
-
-        latest_features = X.iloc[[-1]]
-        latest_pred = self._model.predict(latest_features)[0]
-        latest_prob = self._model.predict_proba(latest_features)[0]
-
-        return {
-            "symbol": self._instrument.symbol,
-            "accuracy": acc,
-            "forecast_direction": "UP" if latest_pred == 1 else "DOWN",
-            "confidence_up": float(latest_prob[1]),
-            "confidence_down": float(latest_prob[0]),
-            "feature_importance": dict(zip(base_features, np.round(self._model.feature_importances_, 4)))
-        }

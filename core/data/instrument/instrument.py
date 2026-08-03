@@ -6,6 +6,8 @@ from core.tools.logger import get_logger
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import pandas as pd
+
 logger = get_logger(to_file=False)
 
 class InstrumentDataFetchError(Exception):
@@ -13,8 +15,11 @@ class InstrumentDataFetchError(Exception):
 
 class Instrument:
     def __init__(self, symbol):
+        self._symbol = symbol
         self._ticker = Ticker(symbol)
         self._info = None
+
+        self._market_data_history = None
     
     @property
     def info(self):
@@ -29,6 +34,9 @@ class Instrument:
     
     @property
     def symbol(self):
+        if not self._info:
+            return self._symbol
+        
         return self.info.get('symbol')
     
     @property
@@ -42,6 +50,13 @@ class Instrument:
     @property
     def currency(self):
         return self.info.get('currency')
+    
+    @property
+    def market_data_history(self):
+        if self._market_data_history is None:
+            self._market_data_history = self.fetch_historical_market_data()
+        
+        return self._market_data_history
 
     def get_news(self, max_workers: int = 3) -> list[dict]:
         try:
@@ -116,42 +131,51 @@ class Instrument:
             "market_cap": info.get("marketCap")
         }
     
-    def get_historical_market_data(self, start: datetime, end: datetime, interval: str = '1d'): 
-        try:
-            return self._ticker.history(
-                start=start.strftime("%Y-%m-%d"), 
-                end=end.strftime("%Y-%m-%d"), 
-                interval=interval
-            )
-        except Exception as e:
-            raise InstrumentDataFetchError(f'Error while fetching instrument data: {str(e)}')
+    def fetch_market_data_from_period(self, start: datetime, end: datetime): 
+        return self.market_data_history.loc[start.strftime("%Y-%m-%d"):end.strftime("%Y-%m-%d")]
         
-    def get_all_historical_market_data(self, interval: str = '1d'):
+    def fetch_historical_market_data(self, interval: str = '1d'):
         try:
-            return self._ticker.history(
-                period='max',
-                interval=interval
-            )
+            df = self._ticker.history(period='max', interval=interval)
+            
+            if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
+                df.index = df.index.tz_localize(None)
+                
+            df['date'] = pd.to_datetime(df.index)
+            
+            return df
+        
         except Exception as e:
             raise InstrumentDataFetchError(f'Error while fetching instrument data: {str(e)}')
         
     def get_market_data_at_closest_trading_day(self, date: datetime, time_window_days: int = 5) -> dict:
-        window_end_date = date + timedelta(days=time_window_days)
-        market_data_df = self.get_historical_market_data(date, window_end_date)
-
-        if market_data_df.empty:
+        df = self.market_data_history
+        if df.empty:
             return {}
-        
-        closest_day = market_data_df.iloc[0]
+
+        target_dt = pd.Timestamp(date.date())
+
+        idx_loc = df.index.get_indexer([target_dt], method='bfill')[0]
+
+        if idx_loc == -1:
+            idx_loc = len(df) - 1
+
+        closest_date = df.index[idx_loc]
+
+        if closest_date > target_dt + pd.Timedelta(days=time_window_days):
+            return {}
+
+        row = df.iloc[idx_loc]
+
         return {
-            "trading_date": market_data_df.index[0].strftime("%Y-%m-%d"),
-            "open": round(float(closest_day["Open"]), 2),
-            "high": round(float(closest_day["High"]), 2),
-            "low": round(float(closest_day["Low"]), 2),
-            "close": round(float(closest_day["Close"]), 2),
-            "volume": int(closest_day["Volume"])
+            "trading_date": closest_date.strftime("%Y-%m-%d"),
+            "open": round(float(row["Open"]), 2),
+            "high": round(float(row["High"]), 2),
+            "low": round(float(row["Low"]), 2),
+            "close": round(float(row["Close"]), 2),
+            "volume": int(row["Volume"])
         }
-        
+            
     
     def get_financial_metrics(self) -> dict:
         info = self.info
@@ -207,4 +231,5 @@ class Instrument:
     def refresh_data(self):
         self._ticker = Ticker(self.symbol)
         self._info = None
+        self._market_data_history = None
         return self.info
