@@ -50,6 +50,19 @@ MAX_PORTFOLIO_CAP_PCT = 0.40
 HIGH_CONF_PORTFOLIO_CAP = 0.80
 STOP_LOSS_ATR_MULT = 2.5
 
+RISK_PER_TRADE_PCT = 0.02
+MAX_PORTFOLIO_CAP_PCT = 0.40
+HIGH_CONF_PORTFOLIO_CAP = 0.80
+HIGH_CONF_THRESHOLD = 0.75          # confidence_up above this unlocks the bigger cap
+ENTRY_CONFIDENCE_THRESHOLD = 0.55
+EXIT_ON_REVERSAL_CONFIDENCE = 0.55  # confidence_down needed to exit on a signal flip
+ 
+STOP_LOSS_ATR_MULT = 3.0            # single source of truth for stop distance --
+TRAILING_STOP_ATR_MULT = 3.0        # used consistently for sizing AND placement
+TAKE_PROFIT_ATR_MULT = 4.0
+ 
+MIN_TRADE_VALUE = 50.0
+
 @dataclass
 class TrackedPosition:
     entry_date: datetime
@@ -83,7 +96,7 @@ class ATRStopLossStrategy(ModelStrategy):
             self._tracked_position.highest_price = highest_price
 
             if atr > 0:
-                trailing_stop = highest_price - (3.0 * atr)
+                trailing_stop = highest_price - (TRAILING_STOP_ATR_MULT * atr)
                 if trailing_stop > self._tracked_position.stop_loss_price:
                     self._tracked_position.stop_loss_price = trailing_stop
 
@@ -112,8 +125,8 @@ class ATRStopLossStrategy(ModelStrategy):
                         engine_state.date,
                         close_price,
                         close_price,
-                        close_price - (3.0 * atr),
-                        close_price + (4.0 * atr)
+                        close_price - (STOP_LOSS_ATR_MULT * atr),
+                        close_price + (TAKE_PROFIT_ATR_MULT * atr)
                     )
                     
                     return StrategyResult('BUY', final_allocation)

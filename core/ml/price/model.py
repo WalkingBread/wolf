@@ -27,13 +27,23 @@ class PriceDirPredictor(ABC):
     def instrument(self):
         return self._instrument
 
+    @property
+    def features(self) -> list:
+        return [
+            'Return_1D',
+            'Return_5D',
+            'Return_10D',
+            'SMA_Ratio',
+            'RSI_14',
+            'MACD',
+            'ATR_14',
+            'Volume_Change',
+            'Volume_Price_Force',
+            'Daily_Range_Normalized',
+        ]
+    
     @abstractmethod
     def _init_model(self):
-        pass
-
-    @property
-    @abstractmethod
-    def features(self) -> list:
         pass
 
     def _fetch_data(self, end_date: datetime = None) -> pd.DataFrame:
@@ -163,21 +173,6 @@ class PriceDirPredictorRF(PriceDirPredictor):
             random_state=42, 
             class_weight="balanced"
         )
-
-    @property
-    def features(self):
-        return [
-            'Return_1D',
-            'Return_5D',
-            'Return_10D',
-            'SMA_Ratio',
-            'RSI_14',
-            'MACD',
-            'ATR_14',
-            'Volume_Change',
-            'Volume_Price_Force',
-            'Daily_Range_Normalized',
-        ]
     
 
 class PriceDirPredictorLGBM(PriceDirPredictor):
@@ -197,21 +192,6 @@ class PriceDirPredictorLGBM(PriceDirPredictor):
             verbose=-1
         )
 
-    @property
-    def features(self) -> list:
-        return [
-            'Return_1D',
-            'Return_5D',
-            'Return_10D',
-            'SMA_Ratio',
-            'RSI_14',
-            'MACD',
-            'ATR_14',
-            'Volume_Change',
-            'Volume_Price_Force',
-            'Daily_Range_Normalized',
-        ]
-
     
 class PriceDirPredictorXGB(PriceDirPredictor):
     def _init_model(self):
@@ -226,60 +206,3 @@ class PriceDirPredictorXGB(PriceDirPredictor):
             random_state=42,
             eval_metric='logloss'
         )
-
-    @property
-    def features(self) -> list:
-        return [
-            'Return_1D',
-            'Return_5D',
-            'Return_10D',
-            'SMA_Ratio',
-            'RSI_14',
-            'MACD',
-            'ATR_14',
-            'Volume_Change',
-            'Volume_Price_Force',
-            'Daily_Range_Normalized',
-        ]
-    
-
-class PriceDirPredictorEnsemble(PriceDirPredictor):
-
-    def _init_model(self):
-        rf = RandomForestClassifier(
-            n_estimators=150, max_depth=4, random_state=42, class_weight="balanced"
-        )
-        
-        lgbm = lightgbm.LGBMClassifier(
-            n_estimators=100, max_depth=3, learning_rate=0.03, 
-            random_state=42, verbose=-1, class_weight='balanced'
-        )
-        
-        lr = make_pipeline(
-            StandardScaler(), 
-            LogisticRegression(C=0.1, class_weight='balanced', random_state=42)
-        )
-
-        return VotingClassifier(
-            estimators=[
-                ('rf', rf),
-                ('lgbm', lgbm),
-                ('lr', lr)
-            ],
-            voting='soft'
-        )
-
-    @property
-    def features(self) -> list:
-        return [
-            'Return_1D',
-            'Return_5D',
-            'Return_10D',
-            'SMA_Ratio',
-            'RSI_14',
-            'MACD',
-            'ATR_14',
-            'Volume_Change',
-            'Volume_Price_Force',
-            'Daily_Range_Normalized',
-        ]
