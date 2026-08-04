@@ -153,19 +153,23 @@ class Instrument:
         if df.empty:
             return {}
 
-        target_dt = pd.Timestamp(date.date())
-
-        idx_loc = df.index.get_indexer([target_dt], method='bfill')[0]
-
-        if idx_loc == -1:
-            idx_loc = len(df) - 1
-
-        closest_date = df.index[idx_loc]
-
-        if closest_date > target_dt + pd.Timedelta(days=time_window_days):
+        valid_df = df.dropna(subset=['Close', 'Open', 'High', 'Low'])
+        if valid_df.empty:
             return {}
 
-        row = df.iloc[idx_loc]
+        target_dt = pd.Timestamp(date.date())
+
+        idx_loc = valid_df.index.get_indexer([target_dt], method='ffill')[0]
+
+        if idx_loc == -1:
+            return {}
+
+        closest_date = valid_df.index[idx_loc]
+
+        if target_dt - closest_date > pd.Timedelta(days=time_window_days):
+            return {}
+
+        row = valid_df.iloc[idx_loc]
 
         return {
             "trading_date": closest_date.strftime("%Y-%m-%d"),
@@ -173,10 +177,9 @@ class Instrument:
             "high": round(float(row["High"]), 2),
             "low": round(float(row["Low"]), 2),
             "close": round(float(row["Close"]), 2),
-            "volume": int(row["Volume"])
+            "volume": int(row["Volume"]) if not pd.isna(row["Volume"]) else 0
         }
             
-    
     def get_financial_metrics(self) -> dict:
         info = self.info
         return {

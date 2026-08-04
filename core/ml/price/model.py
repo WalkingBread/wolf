@@ -58,11 +58,15 @@ class PriceDirPredictor(ABC):
         low_col = 'Low'
         vol_col = 'Volume'
 
+        data['prev_close'] = data[close_col].shift(1)
+
         data['Return_1D'] = data[close_col].pct_change(1)
         data['Return_5D'] = data[close_col].pct_change(5)
         data['Return_10D'] = data[close_col].pct_change(10)
 
+        data['SMA_5'] = ta.trend.sma_indicator(data[close_col], window=5)
         data['SMA_10'] = ta.trend.sma_indicator(data[close_col], window=10)
+        data['SMA_20'] = ta.trend.sma_indicator(data[close_col], window=20)
         data['SMA_50'] = ta.trend.sma_indicator(data[close_col], window=50)
         data['SMA_Ratio'] = data['SMA_10'] / data['SMA_50']
 
@@ -121,7 +125,11 @@ class PriceDirPredictor(ABC):
                 'confidence_up': 0.5,
                 'confidence_down': 0.5,
                 'atr': 0.0,
-                'close': 0.0
+                'close': 0.0,
+                'sma_5': 0.0,
+                'sma_20': 0.0,
+                'sma_50': 0.0,
+                'prev_close': 0.0
             }
 
         latest_row = features_df.iloc[-1]
@@ -136,7 +144,11 @@ class PriceDirPredictor(ABC):
             'confidence_up': float(prob[1]),
             'confidence_down': float(prob[0]),
             'atr': float(latest_row['ATR_14']),
-            'close': float(latest_row['Close'])
+            'close': float(latest_row['Close']),
+            'sma_5': float(latest_row['SMA_5']),
+            'sma_20': float(latest_row['SMA_20']),
+            'sma_50': float(latest_row['SMA_50']),
+            'prev_close': float(latest_row['prev_close'])
         }
     
 N_ESTIMATORS = 200

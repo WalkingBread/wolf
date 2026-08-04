@@ -45,12 +45,14 @@ class BacktestEngine:
     def next_day(self):
         engine_state = EngineState(self.date, self._portfolio, self._cash)
 
-        result: Optional[StrategyResult] = self._strategy.apply(engine_state)
-        if result is not None:
-            if result.type == 'BUY':
-                self.buy(self._strategy.instrument, result.amount)
-            elif result.type == 'SELL':
-                self.sell(self._strategy.instrument.symbol, result.amount)
+        if self._strategy is not None:
+            result: Optional[StrategyResult] = self._strategy.apply(engine_state)
+            
+            if result is not None:
+                if result.type == 'BUY':
+                    self.buy(self._strategy.instrument, result.amount)
+                elif result.type == 'SELL':
+                    self.sell(self._strategy.instrument.symbol, result.amount)
 
         if self.date < datetime.now():
             self.date += timedelta(days=1)
@@ -66,7 +68,7 @@ class BacktestEngine:
         market_data = instrument.get_market_data_at_closest_trading_day(self.date)
         price = self._portfolio.convert_to_native_currency(market_data['close'], instrument.currency)
 
-        volume = (amount - fee) / price
+        volume = (amount - fee) / price if price != 0 else 0
 
         asset = Asset(instrument, volume, price, self.date)
 
@@ -88,7 +90,7 @@ class BacktestEngine:
         market_data = asset.instrument.get_market_data_at_closest_trading_day(self.date)
         price = self._portfolio.convert_to_native_currency(market_data['close'], asset.currency)
 
-        volume_to_sell = amount / price
+        volume_to_sell = amount / price if price != 0 else 0
         if volume_to_sell > asset.volume:
             volume_to_sell = asset.volume
 

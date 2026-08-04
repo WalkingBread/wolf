@@ -77,7 +77,7 @@ class Asset:
         self.purchase_date = purchase_date
 
     def reduce_volume(self, volume: float) -> None:
-        self.volume = max(0, self.volume - volume)
+        self.volume = max(0, round(self.volume - volume, 4))
     
 
 class Portfolio:
@@ -115,7 +115,7 @@ class Portfolio:
         asset = self._assets[symbol]
         asset.reduce_volume(volume)
 
-        if asset.volume == 0:
+        if round(asset.volume, 4) <= 0:
             self.remove(symbol)
 
     def remove(self, symbol: str) -> None:
@@ -176,7 +176,7 @@ class Portfolio:
             "==================================================",
             f"💼 Portfolio {self.name} Summary ({today.strftime('%Y-%m-%d')})",
             "==================================================",
-            f"Currency:       {self.currency}"
+            f"Currency:       {self.currency}",
             f"Initial value:  {self.initial_value:,.2f}",
             f"Current value:  {self.value:,.2f}",
             f"Value change:   {total_change:+,.2f} ({total_percent:+.2f}%)",

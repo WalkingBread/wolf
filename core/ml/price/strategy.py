@@ -4,16 +4,12 @@ from core.ml.price.dto import StrategyResult, EngineState
 
 from abc import ABC, abstractmethod
 from datetime import datetime
+from dataclasses import dataclass
 
 class ModelStrategy(ABC):
     def __init__(self, model: PriceDirPredictor):
         self._model = model
         self._days_since_retrain = model.horizon
-
-        self._position_tracker = {
-            'entry_price': None,
-            'stop_loss_price': None
-        }
 
     @property
     def instrument(self):
@@ -51,29 +47,57 @@ class ModelStrategy(ABC):
 
 RISK_PER_TRADE_PCT = 0.02
 MAX_PORTFOLIO_CAP_PCT = 0.40 
-STOP_LOSS_ATR_MULT = 2.0
+HIGH_CONF_PORTFOLIO_CAP = 0.80
+STOP_LOSS_ATR_MULT = 2.5
+
+@dataclass
+class TrackedPosition:
+    entry_date: datetime
+    entry_price: float
+    highest_price: float
+    stop_loss_price: float
+    take_profit_price: float
+
+    def get_days_held(self, date: datetime):
+        return date - self.entry_date
+
 
 class ATRStopLossStrategy(ModelStrategy):
 
+    def __init__(self, model):
+        super().__init__(model)
+
+        self._tracked_position = None
+
+
     def _strategy(self, engine_state: EngineState, forecast: dict):
         signal = forecast['signal']
-        confidence = forecast['confidence_up']
+        confidence_up = forecast.get('confidence_up', 0.0)
         atr = forecast['atr']
         close_price = forecast['close']
 
         asset = engine_state.portfolio.get_asset(self.instrument_symbol)
-        if asset is not None and self._position_tracker['stop_loss_price'] is not None:
-            stop_price = self._position_tracker['stop_loss_price']
 
-            if close_price <= stop_price:
-                self._position_tracker['entry_price'] = None
-                self._position_tracker['stop_loss_price'] = None
+        if asset is not None:
+            highest_price = max(self._tracked_position.highest_price, close_price)
+            self._tracked_position.highest_price = highest_price
 
+            if atr > 0:
+                trailing_stop = highest_price - (3.0 * atr)
+                if trailing_stop > self._tracked_position.stop_loss_price:
+                    self._tracked_position.stop_loss_price = trailing_stop
+
+            stop_price = self._tracked_position.stop_loss_price
+            take_profit = self._tracked_position.take_profit_price
+
+            if close_price <= stop_price or close_price >= take_profit:
+                self._tracked_position = None
                 return StrategyResult('SELL', asset.volume * close_price)
 
-        if signal == 1 and confidence > 0.55:
+        elif asset is None and signal == 1 and confidence_up >= 0.62:
             if atr > 0 and close_price > 0:
-                total_portfolio_value = engine_state.portfolio.get_value_at_date(engine_state.date) + engine_state.cash
+                total_portfolio_value = engine_state.total_value
+
                 risk_budget = total_portfolio_value * RISK_PER_TRADE_PCT
                 atr_stop_distance = STOP_LOSS_ATR_MULT * atr
                 
@@ -84,15 +108,14 @@ class ATRStopLossStrategy(ModelStrategy):
                 final_allocation = min(calculated_amount, max_cash_allowed)
     
                 if final_allocation > 50:
-                    self._position_tracker['entry_price'] = close_price
-                    self._position_tracker['stop_loss_price'] = close_price - atr_stop_distance
+                    self._tracked_position = TrackedPosition(
+                        engine_state.date,
+                        close_price,
+                        close_price,
+                        close_price - (3.0 * atr),
+                        close_price + (4.0 * atr)
+                    )
                     
                     return StrategyResult('BUY', final_allocation)
-    
-        elif signal == 0 and asset is not None:
-            self._position_tracker['entry_price'] = None
-            self._position_tracker['stop_loss_price'] = None
-
-            return StrategyResult('SELL', asset.volume * close_price)
 
         return None
