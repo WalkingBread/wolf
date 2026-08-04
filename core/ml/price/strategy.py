@@ -45,20 +45,12 @@ class ModelStrategy(ABC):
         pass
 
 
-RISK_PER_TRADE_PCT = 0.02
-MAX_PORTFOLIO_CAP_PCT = 0.40 
-HIGH_CONF_PORTFOLIO_CAP = 0.80
-STOP_LOSS_ATR_MULT = 2.5
-
-RISK_PER_TRADE_PCT = 0.02
-MAX_PORTFOLIO_CAP_PCT = 0.40
-HIGH_CONF_PORTFOLIO_CAP = 0.80
-HIGH_CONF_THRESHOLD = 0.75          # confidence_up above this unlocks the bigger cap
+RISK_PER_TRADE_PCT = 0.05
+MAX_PORTFOLIO_CAP_PCT = 0.8
 ENTRY_CONFIDENCE_THRESHOLD = 0.55
-EXIT_ON_REVERSAL_CONFIDENCE = 0.55  # confidence_down needed to exit on a signal flip
  
-STOP_LOSS_ATR_MULT = 3.0            # single source of truth for stop distance --
-TRAILING_STOP_ATR_MULT = 3.0        # used consistently for sizing AND placement
+STOP_LOSS_ATR_MULT = 2.5
+TRAILING_STOP_ATR_MULT = 3.0  
 TAKE_PROFIT_ATR_MULT = 4.0
  
 MIN_TRADE_VALUE = 50.0
@@ -91,7 +83,44 @@ class ATRStopLossStrategy(ModelStrategy):
 
         asset = engine_state.portfolio.get_asset(self.instrument_symbol)
 
-        if asset is not None:
+        if asset is None:
+            self._tracked_position = None
+            if signal == 1 and confidence_up >= ENTRY_CONFIDENCE_THRESHOLD:
+                if atr > 0 and close_price > 0:
+                    total_portfolio_value = engine_state.total_value
+
+                    risk_budget = total_portfolio_value * RISK_PER_TRADE_PCT
+                    atr_stop_distance = STOP_LOSS_ATR_MULT * atr
+                    
+                    target_shares = risk_budget / atr_stop_distance
+                    calculated_amount = target_shares * close_price
+        
+                    max_cash_allowed = engine_state.cash * MAX_PORTFOLIO_CAP_PCT
+                    final_allocation = min(calculated_amount, max_cash_allowed)
+        
+                    if final_allocation > MIN_TRADE_VALUE:
+                        self._tracked_position = TrackedPosition(
+                            engine_state.date,
+                            close_price,
+                            close_price,
+                            close_price - (STOP_LOSS_ATR_MULT * atr),
+                            close_price + (TAKE_PROFIT_ATR_MULT * atr)
+                        )
+                        
+                        return StrategyResult('BUY', final_allocation)
+
+        else:
+            stop_dist = (STOP_LOSS_ATR_MULT * atr) if atr > 0 else (close_price * 0.05)
+            tp_dist = (TAKE_PROFIT_ATR_MULT * atr) if atr > 0 else (close_price * 0.10)
+                
+            self._tracked_position = TrackedPosition(
+                entry_date=engine_state.date,
+                entry_price=close_price,
+                highest_price=close_price,
+                stop_loss_price=close_price - stop_dist,
+                take_profit_price=close_price + tp_dist
+            )
+
             highest_price = max(self._tracked_position.highest_price, close_price)
             self._tracked_position.highest_price = highest_price
 
@@ -106,29 +135,5 @@ class ATRStopLossStrategy(ModelStrategy):
             if close_price <= stop_price or close_price >= take_profit:
                 self._tracked_position = None
                 return StrategyResult('SELL', asset.volume * close_price)
-
-        elif asset is None and signal == 1 and confidence_up >= 0.62:
-            if atr > 0 and close_price > 0:
-                total_portfolio_value = engine_state.total_value
-
-                risk_budget = total_portfolio_value * RISK_PER_TRADE_PCT
-                atr_stop_distance = STOP_LOSS_ATR_MULT * atr
-                
-                target_shares = risk_budget / atr_stop_distance
-                calculated_amount = target_shares * close_price
-    
-                max_cash_allowed = engine_state.cash * MAX_PORTFOLIO_CAP_PCT
-                final_allocation = min(calculated_amount, max_cash_allowed)
-    
-                if final_allocation > 50:
-                    self._tracked_position = TrackedPosition(
-                        engine_state.date,
-                        close_price,
-                        close_price,
-                        close_price - (STOP_LOSS_ATR_MULT * atr),
-                        close_price + (TAKE_PROFIT_ATR_MULT * atr)
-                    )
-                    
-                    return StrategyResult('BUY', final_allocation)
 
         return None

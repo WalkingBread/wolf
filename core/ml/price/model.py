@@ -3,6 +3,7 @@ import numpy as np
 import ta
 import lightgbm
 import xgboost as xgb
+import yfinance as yf
 
 from abc import ABC, abstractmethod
 
@@ -16,6 +17,34 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from datetime import datetime, timedelta
+
+SECTOR_ETF_MAP = {
+    "Technology": "XLK",
+    "Financial Services": "XLF",
+    "Healthcare": "XLV",
+    "Consumer Cyclical": "XLY",
+    "Consumer Defensive": "XLP",
+    "Energy": "XLE",
+    "Industrials": "XLI",
+    "Utilities": "XLU",
+    "Real Estate": "XLRE",
+    "Basic Materials": "XLB",
+    "Communication Services": "XLC",
+}
+
+MARKET_INDEX_TICKER = "SPY"
+VIX_TICKER = "^VIX"
+
+_market_series_cache: dict[str, pd.DataFrame] = {}
+
+
+def _fetch_reference_series(ticker_symbol: str) -> pd.DataFrame:
+    if ticker_symbol not in _market_series_cache:
+        df = yf.Ticker(ticker_symbol).history(period='max', interval='1d')
+        if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
+        _market_series_cache[ticker_symbol] = df
+    return _market_series_cache[ticker_symbol].copy()
 
 class PriceDirPredictor(ABC):
     def __init__(self, instrument: Instrument, horizon_days = 5):
